@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.25)
 project(AudioFlowMatrix
     VERSION 0.2.0
     DESCRIPTION "Low-latency ASIO/WASAPI routing matrix for Windows"
-    LANGUAGES CXX)
+    LANGUAGES CXX RC)
 
 if(NOT WIN32)
     message(WARNING "AudioFlow Matrix targets Windows. Only the portable core and tests build elsewhere.")

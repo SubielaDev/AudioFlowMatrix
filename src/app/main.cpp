@@ -4,6 +4,8 @@
 //   AudioFlowMatrix.exe --list   print ASIO drivers and WASAPI devices, then exit
 
 #include "App.h"
+#include "Brand.h"
+#include "resource.h"
 
 #include "afm/asio/BridgeProtocol.h"
 #include "backends/imgui_impl_opengl3.h"
@@ -76,42 +78,6 @@ LRESULT WINAPI wndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     return DefWindowProcW(hwnd, msg, wParam, lParam);
 }
 
-void applyTheme(float scale) {
-    ImGuiStyle& style = ImGui::GetStyle();
-    ImGui::StyleColorsDark();
-    style.WindowRounding = 0.0f;
-    style.FrameRounding = 4.0f;
-    style.GrabRounding = 3.0f;
-    style.TabRounding = 4.0f;
-    style.ChildRounding = 4.0f;
-    style.PopupRounding = 4.0f;
-    style.FramePadding = ImVec2(8, 5);
-    style.ItemSpacing = ImVec2(8, 6);
-    style.GrabMinSize = 14.0f;
-    style.TableAngledHeadersAngle = 50.0f * 3.14159265f / 180.0f;
-
-    ImVec4* c = style.Colors;
-    c[ImGuiCol_WindowBg] = ImVec4(0.105f, 0.11f, 0.125f, 1);
-    c[ImGuiCol_ChildBg] = ImVec4(0.12f, 0.125f, 0.14f, 1);
-    c[ImGuiCol_PopupBg] = ImVec4(0.13f, 0.135f, 0.155f, 0.98f);
-    c[ImGuiCol_FrameBg] = ImVec4(0.17f, 0.18f, 0.21f, 1);
-    c[ImGuiCol_FrameBgHovered] = ImVec4(0.22f, 0.24f, 0.28f, 1);
-    c[ImGuiCol_FrameBgActive] = ImVec4(0.26f, 0.29f, 0.34f, 1);
-    c[ImGuiCol_Button] = ImVec4(0.2f, 0.22f, 0.26f, 1);
-    c[ImGuiCol_ButtonHovered] = ImVec4(0.27f, 0.3f, 0.36f, 1);
-    c[ImGuiCol_ButtonActive] = ImVec4(0.32f, 0.36f, 0.44f, 1);
-    c[ImGuiCol_Header] = ImVec4(0.2f, 0.22f, 0.26f, 1);
-    c[ImGuiCol_HeaderHovered] = ImVec4(0.26f, 0.3f, 0.36f, 1);
-    c[ImGuiCol_Tab] = ImVec4(0.15f, 0.16f, 0.19f, 1);
-    c[ImGuiCol_TabHovered] = ImVec4(0.26f, 0.42f, 0.62f, 1);
-    c[ImGuiCol_TabSelected] = ImVec4(0.2f, 0.34f, 0.52f, 1);
-    c[ImGuiCol_SliderGrab] = ImVec4(0.75f, 0.78f, 0.82f, 1);
-    c[ImGuiCol_SliderGrabActive] = ImVec4(1, 1, 1, 1);
-    c[ImGuiCol_TableHeaderBg] = ImVec4(0.14f, 0.15f, 0.18f, 1);
-    c[ImGuiCol_CheckMark] = ImVec4(0.4f, 0.75f, 1.0f, 1);
-    style.ScaleAllSizes(scale);
-}
-
 int listDevices() {
     AttachConsole(ATTACH_PARENT_PROCESS);
     std::printf("ASIO drivers:\n");
@@ -153,7 +119,9 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR cmdLine, int) {
     wc.lpfnWndProc = wndProc;
     wc.hInstance = instance;
     wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
-    wc.hIcon = LoadIconW(nullptr, IDI_APPLICATION);
+    wc.hIcon = LoadIconW(instance, MAKEINTRESOURCEW(IDI_APP_ICON));
+    wc.hIconSm = static_cast<HICON>(LoadImageW(instance, MAKEINTRESOURCEW(IDI_APP_ICON), IMAGE_ICON, GetSystemMetrics(SM_CXSMICON),
+                                               GetSystemMetrics(SM_CYSMICON), LR_DEFAULTCOLOR));
     wc.lpszClassName = afm::bridge::kAppWindowClass;
     RegisterClassExW(&wc);
 
@@ -183,10 +151,11 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR cmdLine, int) {
         fontConfig.SizePixels = 13.0f * scale;
         io.Fonts->AddFontDefault(&fontConfig);
     }
-    applyTheme(scale);
+    afm::app::brand::applyTheme(scale);
 
     ImGui_ImplWin32_InitForOpenGL(hwnd);
     ImGui_ImplOpenGL3_Init();
+    afm::app::brand::loadTextures();
 
     {
         auto app = std::make_unique<afm::app::App>(hwnd);
@@ -212,13 +181,15 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR cmdLine, int) {
             ImGui::Render();
 
             glViewport(0, 0, g_width, g_height);
-            glClearColor(0.1f, 0.1f, 0.12f, 1.0f);
+            const ImVec4 bg = afm::app::brand::kBackground;
+            glClearColor(bg.x, bg.y, bg.z, 1.0f);
             glClear(GL_COLOR_BUFFER_BIT);
             ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
             SwapBuffers(g_dc);
         }
     }  // App shuts audio down here, before the window goes away
 
+    afm::app::brand::releaseTextures();
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplWin32_Shutdown();
     ImGui::DestroyContext();

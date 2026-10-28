@@ -2,6 +2,7 @@
 // routingDirty_, which republishes the coefficients to the audio thread once per frame.
 
 #include "App.h"
+#include "Brand.h"
 
 #include "imgui.h"
 
@@ -13,9 +14,10 @@ namespace afm::app {
 
 namespace {
 
-constexpr ImU32 kGroupColors[] = {IM_COL32(86, 156, 214, 255), IM_COL32(220, 160, 70, 255),
-                                  IM_COL32(120, 200, 120, 255), IM_COL32(200, 110, 180, 255),
-                                  IM_COL32(160, 160, 230, 255)};
+// Brand cyan and violet first, then distinct hues for further devices.
+constexpr ImU32 kGroupColors[] = {IM_COL32(30, 200, 245, 255), IM_COL32(160, 120, 250, 255),
+                                  IM_COL32(240, 170, 70, 255), IM_COL32(90, 210, 140, 255),
+                                  IM_COL32(235, 110, 190, 255)};
 
 ImU32 groupColor(std::size_t g) { return kGroupColors[g % std::size(kGroupColors)]; }
 
@@ -105,6 +107,14 @@ bool deviceCombo(const char* label, const std::vector<wasapi::DeviceInfo>& devic
 
 void App::drawToolbar() {
     const float s = scale();
+    const float frameH = ImGui::GetFrameHeight();
+    const float logoH = frameH * 1.6f;
+    const float y0 = ImGui::GetCursorPosY();
+    brand::wordmark(logoH);
+    ImGui::SameLine(0, 24 * s);
+    ImGui::SetCursorPosY(y0 + (logoH - frameH) * 0.5f);
+    ImGui::BeginGroup();
+
     if (running_) {
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.55f, 0.18f, 0.16f, 1));
         if (ImGui::Button("Stop", ImVec2(80 * s, 0))) stopAudio();
@@ -128,7 +138,7 @@ void App::drawToolbar() {
     ImGui::SameLine(0, 24 * s);
     char load[32];
     std::snprintf(load, sizeof(load), "DSP %.0f%%", dspLoad_ * 100.0f);
-    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, dspPeak_ > 0.8f ? ImVec4(0.85f, 0.3f, 0.25f, 1) : ImVec4(0.3f, 0.6f, 0.9f, 1));
+    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, dspPeak_ > 0.8f ? ImVec4(0.85f, 0.3f, 0.25f, 1) : ImGui::GetStyle().Colors[ImGuiCol_PlotHistogram]);
     ImGui::ProgressBar(std::clamp(dspLoad_, 0.0f, 1.0f), ImVec2(110 * s, 0), load);
     ImGui::PopStyleColor();
     if (ImGui::IsItemHovered()) {
@@ -145,6 +155,7 @@ void App::drawToolbar() {
     } else {
         ImGui::TextDisabled(driverRegistered_ ? "ASIO client: waiting for Traktor/DAW" : "Virtual ASIO driver not registered");
     }
+    ImGui::EndGroup();
     ImGui::Spacing();
 }
 
@@ -199,13 +210,20 @@ void App::drawMatrix() {
             else if (xp.gainDb <= kFaderMinDb) std::snprintf(label, sizeof(label), "-###c");
             else std::snprintf(label, sizeof(label), "%+.0f###c", xp.gainDb);
 
-            const ImVec4 bg = !xp.routed ? ImVec4(0.17f, 0.18f, 0.21f, 1)
-                              : xp.mute  ? ImVec4(0.50f, 0.22f, 0.18f, 1)
-                                         : ImVec4(0.16f, 0.56f, 0.32f, 1);
+            // Active routes wear the logo gradient; the button on top is translucent so the label stays readable.
+            const bool live = xp.routed && !xp.mute;
+            if (live) {
+                const ImVec2 p0 = ImGui::GetCursorScreenPos();
+                brand::gradientRect(ImGui::GetWindowDrawList(), p0,
+                                    ImVec2(p0.x + ImGui::GetContentRegionAvail().x, p0.y + ImGui::GetFrameHeight()));
+            }
+            const ImVec4 bg = live      ? ImVec4(0, 0, 0, 0)
+                              : xp.mute ? ImVec4(0.45f, 0.10f, 0.14f, 1)
+                                        : ImVec4(0.07f, 0.09f, 0.13f, 1);
             ImGui::PushID(static_cast<int>(o * nIn + i));
             ImGui::PushStyleColor(ImGuiCol_Button, bg);
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(bg.x + 0.12f, bg.y + 0.12f, bg.z + 0.12f, 1));
-            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(bg.x + 0.2f, bg.y + 0.2f, bg.z + 0.2f, 1));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, live ? ImVec4(1, 1, 1, 0.18f) : ImVec4(bg.x + 0.1f, bg.y + 0.1f, bg.z + 0.12f, 1));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, live ? ImVec4(1, 1, 1, 0.3f) : ImVec4(bg.x + 0.18f, bg.y + 0.18f, bg.z + 0.2f, 1));
             if (ImGui::Button(label, ImVec2(-FLT_MIN, 0))) {
                 xp.routed = !xp.routed;
                 routingDirty_ = true;

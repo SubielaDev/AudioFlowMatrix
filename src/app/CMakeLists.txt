@@ -1,7 +1,9 @@
 add_executable(AudioFlowMatrix WIN32
     main.cpp
     App.cpp
-    Gui.cpp)
+    Gui.cpp
+    Brand.cpp
+    app.rc)
 
 target_link_libraries(AudioFlowMatrix PRIVATE
     afm::asio_host

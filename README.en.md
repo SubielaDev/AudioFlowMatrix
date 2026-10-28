@@ -1,4 +1,4 @@
-# AudioFlow Matrix
+<h1 align="center"><img src="docs/assets/logo.jpg" alt="AudioFlow Matrix" width="640"></h1>
 
 [Español](README.md) · **English**
 

@@ -1,3 +1,5 @@
+<p align="center"><img src="assets/logo.jpg" alt="AudioFlow Matrix" width="480"></p>
+
 # AudioFlow Matrix — Guía de prueba
 
 AudioFlow Matrix sustituye a ASIO Link Pro / Voicemeeter: une tu tarjeta ASIO, Traktor, un
