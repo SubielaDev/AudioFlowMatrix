@@ -1,0 +1,6 @@
+build/
+out/
+.vs/
+*.user
+# Binaries are published as GitHub releases, not committed.
+dist/
