@@ -1,63 +1,67 @@
 # AudioFlow Matrix
 
-**English** · [Español](README.es.md)
+**Español** · [English](README.en.md)
 
-Low-latency audio router for Windows. One master ASIO interface owns the clock;
-Traktor/DAWs (through a virtual ASIO driver), a USB mic and a Discord/OBS output are
-slaved to it through lock-free rings and drift-compensating resamplers.
+Router de audio de baja latencia para Windows. Una interfaz ASIO maestra marca el reloj;
+Traktor y los DAWs (a través de un driver ASIO virtual), un micrófono USB y una salida
+para Discord/OBS se sincronizan con ella mediante colas lock-free y resamplers que
+compensan la deriva de reloj.
 
 ```
-Focusrite (ASIO, master clock) ──┐                 ┌──> Focusrite outputs
-Traktor / DAW  (virtual ASIO) ───┼──> NxM matrix ──┼──> Traktor inputs (DVS timecode)
-USB mic (WASAPI exclusive) ──────┘    (AVX2)       └──> Discord / OBS (WASAPI)
+Focusrite (ASIO, reloj maestro) ──┐                  ┌──> Salidas de la Focusrite
+Traktor / DAW (ASIO virtual) ─────┼──> matriz NxM ───┼──> Entradas de Traktor (timecode DVS)
+Micro USB (WASAPI exclusivo) ─────┘     (AVX2)       └──> Discord / OBS (WASAPI)
 ```
 
-## Using it
+## Uso
 
-1. Download `AudioFlowMatrix.zip` from [Releases](https://github.com/SubielaDev/AudioFlowMatrix/releases)
-   and unzip `AudioFlowMatrix.exe` and `AudioFlowMatrixASIO.dll` into the same folder.
-2. Run `AudioFlowMatrix.exe`, open **Devices**:
-   - pick the master ASIO driver (e.g. *Focusrite USB ASIO*) and the sample rate;
-   - press **Register driver (administrator)** once, which installs "AudioFlow Matrix ASIO";
-   - optionally enable the USB mic and the stream output (for Discord/OBS use a virtual
-     cable such as VB-CABLE: render to *CABLE Input*, use *CABLE Output* as the mic there).
-3. Press **Start**. In Traktor: *Preferences > Audio Setup > AudioFlow Matrix ASIO*.
-4. **Matrix** tab: click a cell to route, right-click for gain / mute / pan.
-   **Mixer** tab: input and output-bus faders with peak meters.
+1. Descarga `AudioFlowMatrix.zip` desde [Releases](https://github.com/SubielaDev/AudioFlowMatrix/releases)
+   y descomprime `AudioFlowMatrix.exe` y `AudioFlowMatrixASIO.dll` en la misma carpeta.
+2. Abre `AudioFlowMatrix.exe` y ve a la pestaña **Devices**:
+   - elige el driver ASIO maestro (p. ej. *Focusrite USB ASIO*) y la frecuencia de muestreo;
+   - pulsa una vez **Register driver (administrator)**, que instala "AudioFlow Matrix ASIO";
+   - opcionalmente activa el micro USB y la salida de stream (para Discord/OBS usa un cable
+     virtual como VB-CABLE: envía el audio a *CABLE Input* y elige *CABLE Output* como micro allí).
+3. Pulsa **Start**. En Traktor: *Preferences > Audio Setup > AudioFlow Matrix ASIO*.
+4. Pestaña **Matrix**: clic en una celda para rutear, clic derecho para ganancia / mute / paneo.
+   Pestaña **Mixer**: faders de entrada y de bus de salida con medidores de pico.
 
-Settings are saved in `%APPDATA%\AudioFlowMatrix\settings.ini`.
-`AudioFlowMatrix.exe --list` prints the detected ASIO and WASAPI devices.
+Los ajustes se guardan en `%APPDATA%\AudioFlowMatrix\settings.ini`.
+`AudioFlowMatrix.exe --list` muestra los dispositivos ASIO y WASAPI detectados.
 
-## Latency budget
+Para probarlo paso a paso, consulta la [guía de prueba](docs/guia-de-prueba.md).
 
-| Path | Added by AudioFlow Matrix |
+## Latencia
+
+| Ruta | Latencia que añade AudioFlow Matrix |
 |---|---|
-| ASIO in → matrix → ASIO out | 0 (same callback) |
-| Traktor ↔ matrix | 1 block (e.g. 64 samples = 1.33 ms @ 48 kHz) |
-| USB mic → matrix | WASAPI period + ~1.5 blocks of ring headroom |
+| Entrada ASIO → matriz → salida ASIO | 0 (mismo callback) |
+| Traktor ↔ matriz | 1 bloque (p. ej. 64 muestras = 1,33 ms a 48 kHz) |
+| Micro USB → matriz | Periodo WASAPI + ~1,5 bloques de margen en la cola |
 
-The engine itself is allocation-free, lock-free and `noexcept` on the audio thread.
+En el hilo de audio el motor no reserva memoria, no usa locks y es `noexcept`.
 
-## Layout
+## Estructura
 
 ```
-src/core      lock-free SPSC rings (heap and shared-memory), triple buffer, aligned memory
-src/dsp       AVX2/FMA matrix mixer (runtime-dispatched), cubic drift resampler + PI loop
-src/engine    AudioEngine (bus layout, process, telemetry), RoutingModel (dB/mute/pan)
-src/platform  Win32 helpers: COM pointer, MMCSS, UTF-8
-src/asio      ASIO ABI, host for the master driver, virtual driver DLL + shared-memory bridge
-src/wasapi    WASAPI capture/render endpoints (exclusive with shared fallback)
-src/app       Dear ImGui front-end (Win32 + OpenGL 3)
-tests         unit, multithreaded stress, SIMD-vs-reference, drift-lock simulation
+src/core      colas SPSC lock-free (en heap y en memoria compartida), triple buffer, memoria alineada
+src/dsp       mezclador matricial AVX2/FMA (elegido en tiempo de ejecución), resampler cúbico + lazo PI
+src/engine    AudioEngine (bus, process, telemetría), RoutingModel (dB/mute/paneo)
+src/platform  utilidades Win32: puntero COM, MMCSS, UTF-8
+src/asio      ABI de ASIO, host del driver maestro, DLL del driver virtual + puente de memoria compartida
+src/wasapi    endpoints WASAPI de captura y reproducción (exclusivo con fallback a compartido)
+src/app       interfaz Dear ImGui (Win32 + OpenGL 3)
+tests         unitarios, estrés multihilo, SIMD contra referencia, simulación de deriva
 third_party   Dear ImGui 1.91.8 (MIT)
 ```
 
-The ASIO ABI is declared independently in `src/asio/include/afm/asio/AsioAbi.h`, so the
-Steinberg SDK is not needed to build. "ASIO" is a trademark of Steinberg Media Technologies.
+La ABI de ASIO está declarada de forma independiente en `src/asio/include/afm/asio/AsioAbi.h`,
+así que no hace falta el SDK de Steinberg para compilar. "ASIO" es una marca registrada de
+Steinberg Media Technologies.
 
-## Building
+## Compilar
 
-Visual Studio 2022 + CMake 3.25+:
+Visual Studio 2022 + CMake 3.25 o superior:
 
 ```
 cmake --preset msvc-x64
@@ -65,8 +69,8 @@ cmake --build --preset release
 ctest --preset release
 ```
 
-Any Clang/GCC MinGW toolchain (including `zig c++`) also works with the Ninja generator.
+También funciona cualquier toolchain MinGW con Clang/GCC (incluido `zig c++`) con el generador Ninja.
 
-## License
+## Licencia
 
-MIT, see [LICENSE](LICENSE). Dear ImGui is MIT licensed by Omar Cornut.
+MIT, ver [LICENSE](LICENSE). Dear ImGui tiene licencia MIT de Omar Cornut.
