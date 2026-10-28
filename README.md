@@ -1,5 +1,7 @@
 # AudioFlow Matrix
 
+**English** · [Español](README.es.md)
+
 Low-latency audio router for Windows. One master ASIO interface owns the clock;
 Traktor/DAWs (through a virtual ASIO driver), a USB mic and a Discord/OBS output are
 slaved to it through lock-free rings and drift-compensating resamplers.
