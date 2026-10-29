@@ -96,6 +96,10 @@ bool App::startAudio() {
         error_ = error;
         return false;
     }
+    if (host_.bufferSizeFallback()) {
+        warnings_.push_back("The ASIO driver did not report its buffer size; using " +
+                            std::to_string(asio::AsioHost::kFallbackBlockFrames) + " samples.");
+    }
 
     const double rate = host_.sampleRate();
     const std::uint32_t block = host_.blockFrames();
@@ -344,7 +348,9 @@ bool App::loadSettings() {
         const std::string key = line.substr(0, eq);
         const std::string value = line.substr(eq + 1);
         if (key == "driver") settings_.driverName = value;
-        else if (key == "rate") settings_.sampleRate = std::strtod(value.c_str(), nullptr);
+        // Older versions saved "rate", which always defaulted to 48000 Hz and so was never a
+        // deliberate choice; it is ignored and the driver's own rate is used instead.
+        else if (key == "samplerate") settings_.sampleRate = std::strtod(value.c_str(), nullptr);
         else if (key == "mic.enabled") settings_.micEnabled = value == "1";
         else if (key == "mic.id") settings_.micId = win::toWide(value);
         else if (key == "mic.exclusive") settings_.micExclusive = value == "1";
@@ -364,7 +370,7 @@ void App::saveSettings() const {
     std::ofstream out(std::filesystem::path(settingsPath()), std::ios::trunc);
     if (!out) return;
     out << "driver=" << settings_.driverName << '\n'
-        << "rate=" << settings_.sampleRate << '\n'
+        << "samplerate=" << settings_.sampleRate << '\n'
         << "mic.enabled=" << settings_.micEnabled << '\n'
         << "mic.id=" << win::toUtf8(settings_.micId) << '\n'
         << "mic.exclusive=" << settings_.micExclusive << '\n'

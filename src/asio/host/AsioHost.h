@@ -42,8 +42,12 @@ public:
     AsioHost(const AsioHost&) = delete;
     AsioHost& operator=(const AsioHost&) = delete;
 
+    // Used when the driver cannot report its buffer size.
+    static constexpr long kFallbackBlockFrames = 256;
+
     // Instantiates and initialises the driver, then reads its format. If
-    // `preferredSampleRate` > 0 and the driver supports it, switches to that rate.
+    // `preferredSampleRate` > 0 and the driver supports it, switches to that rate;
+    // 0 keeps whatever rate the driver is running at.
     [[nodiscard]] bool load(const DriverEntry& driver, HWND window, double preferredSampleRate, std::string& error);
     void unload();
     [[nodiscard]] bool isLoaded() const noexcept { return driver_ != nullptr; }
@@ -52,6 +56,8 @@ public:
     [[nodiscard]] const std::string& driverName() const noexcept { return name_; }
     [[nodiscard]] double sampleRate() const noexcept { return sampleRate_; }
     [[nodiscard]] std::uint32_t blockFrames() const noexcept { return blockFrames_; }
+    // True when blockFrames() is kFallbackBlockFrames because the driver did not report a size.
+    [[nodiscard]] bool bufferSizeFallback() const noexcept { return bufferSizeFallback_; }
     [[nodiscard]] const std::vector<ChannelDesc>& inputs() const noexcept { return inputs_; }
     [[nodiscard]] const std::vector<ChannelDesc>& outputs() const noexcept { return outputs_; }
     [[nodiscard]] long inputLatency() const noexcept { return inputLatency_; }
@@ -85,6 +91,7 @@ private:
     std::string name_;
     double sampleRate_ = 0.0;
     std::uint32_t blockFrames_ = 0;
+    bool bufferSizeFallback_ = false;
     long inputLatency_ = 0;
     long outputLatency_ = 0;
     std::vector<ChannelDesc> inputs_;

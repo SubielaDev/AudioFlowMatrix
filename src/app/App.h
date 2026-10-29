@@ -15,7 +15,7 @@ namespace afm::app {
 
 struct Settings {
     std::string driverName;
-    double sampleRate = 48000.0;
+    double sampleRate = 0.0;  // 0 = keep the rate the driver is already running at
     bool micEnabled = false;
     std::wstring micId;
     bool micExclusive = true;

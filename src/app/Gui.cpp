@@ -370,14 +370,20 @@ void App::drawDevices() {
     }
     if (drivers_.empty()) ImGui::TextColored(ImVec4(0.95f, 0.65f, 0.2f, 1), "No ASIO drivers found. Install your interface's ASIO driver.");
 
-    static const double kRates[] = {44100.0, 48000.0, 88200.0, 96000.0};
-    char rateLabel[32];
-    std::snprintf(rateLabel, sizeof(rateLabel), "%.0f Hz", settings_.sampleRate);
+    // 0 = leave the interface at whatever rate it is already running at.
+    static const double kRates[] = {0.0, 44100.0, 48000.0, 88200.0, 96000.0};
+    const auto rateName = [this](double r, char* buf, std::size_t size) {
+        if (r > 0.0) std::snprintf(buf, size, "%.0f Hz", r);
+        else if (running_) std::snprintf(buf, size, "Driver setting (%.0f Hz)", host_.sampleRate());
+        else std::snprintf(buf, size, "Driver setting");
+    };
+    char rateLabel[48];
+    rateName(settings_.sampleRate, rateLabel, sizeof(rateLabel));
     ImGui::SetNextItemWidth(comboWidth);
     if (ImGui::BeginCombo("Sample rate", rateLabel)) {
         for (double r : kRates) {
-            char item[32];
-            std::snprintf(item, sizeof(item), "%.0f Hz", r);
+            char item[48];
+            rateName(r, item, sizeof(item));
             if (ImGui::Selectable(item, r == settings_.sampleRate)) {
                 settings_.sampleRate = r;
                 changed = true;

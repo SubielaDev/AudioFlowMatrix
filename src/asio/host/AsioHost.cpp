@@ -4,6 +4,7 @@
 #include "afm/core/AudioTypes.h"
 #include "afm/engine/AudioEngine.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 
@@ -101,10 +102,13 @@ bool AsioHost::readFormat(std::string& error) {
         error = driverError(driver_, "getChannels failed");
         return false;
     }
+    // The preferred size is whatever is set in the driver's control panel right now. A driver
+    // that cannot report it gets kFallbackBlockFrames, kept inside its min..max if it gave those.
     long minSize = 0, maxSize = 0, preferred = 0, granularity = 0;
-    if (driver_->getBufferSize(&minSize, &maxSize, &preferred, &granularity) != ASE_OK || preferred <= 0) {
-        error = driverError(driver_, "getBufferSize failed");
-        return false;
+    bufferSizeFallback_ = driver_->getBufferSize(&minSize, &maxSize, &preferred, &granularity) != ASE_OK || preferred <= 0;
+    if (bufferSizeFallback_) {
+        preferred = kFallbackBlockFrames;
+        if (minSize > 0 && maxSize >= minSize) preferred = std::clamp<long>(preferred, minSize, maxSize);
     }
     if (preferred > static_cast<long>(kMaxBlockFrames)) {
         error = "Driver buffer size " + std::to_string(preferred) + " exceeds the supported maximum of " +
