@@ -25,14 +25,18 @@ USB mic (WASAPI) ────────────────┘    (AVX2)  
 
 ## Using it
 
-1. Download `AudioFlowMatrix.zip` from [Releases](https://github.com/SubielaDev/AudioFlowMatrix/releases)
-   and unzip all files into the same folder. Release v0.2.0 does not include denoise, gate,
-   push-to-talk or MIDI yet: build from source (below) to get them.
-2. Run `AudioFlowMatrix.exe`, open **Devices**:
+1. Download `AudioFlowMatrix-Portable-<version>.exe` from
+   [Releases](https://github.com/SubielaDev/AudioFlowMatrix/releases) and keep it in a fixed folder.
+   It is a single file, no install: it carries the virtual ASIO driver and unpacks it to
+   `%LOCALAPPDATA%\AudioFlowMatrix\driver` when you register it. Windows shows "Windows protected
+   your PC" because the program is not signed: *More info > Run anyway*.
+2. Run AudioFlow Matrix and open **Devices**:
    - pick the master ASIO driver (e.g. *Focusrite USB ASIO*). **Sample rate** *Driver setting*
      keeps whatever rate the interface is running at; the buffer size is the one in the
      interface's control panel (256 samples if the driver does not report it);
-   - press **Register driver (administrator)** once, which installs "AudioFlow Matrix ASIO";
+   - press **Register driver (administrator)** once, which installs "AudioFlow Matrix ASIO". If the
+     driver is registered from another copy (another folder or version), the app says so and
+     offers **Use this copy**;
    - optionally enable the USB mic and the stream output (for Discord/OBS use a virtual
      cable such as VB-CABLE: render to *CABLE Input*, use *CABLE Output* as the mic there).
 3. Press **Start**. In Traktor: *Preferences > Audio Setup > AudioFlow Matrix ASIO*, at the
@@ -71,10 +75,11 @@ red **ON AIR**. Opening and closing fade over ~10 ms.
 | Settings | `%APPDATA%\AudioFlowMatrix\settings.ini` |
 | Diagnostics log (current and previous run) | `%APPDATA%\AudioFlowMatrix\logs` |
 | Crash reports (`.txt` + `.dmp`) | `%APPDATA%\AudioFlowMatrix\crashes` |
+| Virtual ASIO driver (unpacked from the `.exe`) | `%LOCALAPPDATA%\AudioFlowMatrix\driver` |
 
-The `.pdb` files shipped next to the executable let crash reports name functions and lines;
-keep them in the same folder. `AudioFlowMatrix.exe --list` prints the detected ASIO and WASAPI
-devices.
+Crash reports give the module and offset of the fault; with the same build's `.pdb` files next
+to the executable they also name the function and line. `AudioFlowMatrix.exe --list` prints the
+detected ASIO and WASAPI devices and which driver DLL is in use.
 
 ## Latency budget
 
@@ -122,6 +127,10 @@ Any Clang/GCC MinGW toolchain (including `zig c++`) also works with the Ninja ge
 zig, the project pins `-mcpu=x86_64` (`AFM_TARGET_CPU_FLAGS`): otherwise zig targets the build
 machine's CPU and the binaries die with an illegal instruction on other CPUs. AVX2 kernels are
 picked at runtime.
+
+The executable embeds a copy of `AudioFlowMatrixASIO.dll` (resource 101) and uses it when the
+DLL is not next to it, so the same `.exe` doubles as the portable version. It is built as a
+GUI-subsystem application, so it opens no console window.
 
 ## License
 

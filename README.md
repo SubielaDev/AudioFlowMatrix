@@ -26,14 +26,18 @@ Micro USB (WASAPI) ───────────────┘     (AVX2)  
 
 ## Uso
 
-1. Descarga `AudioFlowMatrix.zip` desde [Releases](https://github.com/SubielaDev/AudioFlowMatrix/releases)
-   y descomprime todos los archivos en la misma carpeta. La release v0.2.0 aún no incluye
-   Denoise, Gate, Push-to-talk ni MIDI: para tenerlos, compila desde el código (abajo).
-2. Abre `AudioFlowMatrix.exe` y ve a la pestaña **Devices**:
+1. Descarga `AudioFlowMatrix-Portable-<versión>.exe` desde
+   [Releases](https://github.com/SubielaDev/AudioFlowMatrix/releases) y guárdalo en una carpeta fija.
+   Es un solo archivo, sin instalación: lleva dentro el driver ASIO virtual y, al registrarlo, lo
+   extrae a `%LOCALAPPDATA%\AudioFlowMatrix\driver`. Windows mostrará "Windows protegió su PC"
+   porque el programa no está firmado: *Más información > Ejecutar de todas formas*.
+2. Abre AudioFlow Matrix y ve a la pestaña **Devices**:
    - elige el driver ASIO maestro (p. ej. *Focusrite USB ASIO*). En **Sample rate**,
      *Driver setting* mantiene la frecuencia que ya tenga la tarjeta; el tamaño de búfer es
      el del panel de la tarjeta (256 muestras si el driver no lo informa);
-   - pulsa una vez **Register driver (administrator)**, que instala "AudioFlow Matrix ASIO";
+   - pulsa una vez **Register driver (administrator)**, que instala "AudioFlow Matrix ASIO". Si el
+     driver está registrado desde otra copia (otra carpeta o versión), la app lo avisa y ofrece
+     **Use this copy**;
    - opcionalmente activa el micro USB y la salida de stream (para Discord/OBS usa un cable
      virtual como VB-CABLE: envía el audio a *CABLE Input* y elige *CABLE Output* como micro allí).
 3. Pulsa **Start**. En Traktor: *Preferences > Audio Setup > AudioFlow Matrix ASIO*, a la misma
@@ -74,10 +78,12 @@ Pestaña **MIDI**:
 | Ajustes | `%APPDATA%\AudioFlowMatrix\settings.ini` |
 | Log de diagnóstico (sesión actual y anterior) | `%APPDATA%\AudioFlowMatrix\logs` |
 | Informes de crash (`.txt` + `.dmp`) | `%APPDATA%\AudioFlowMatrix\crashes` |
+| Driver ASIO virtual (extraído del `.exe`) | `%LOCALAPPDATA%\AudioFlowMatrix\driver` |
 
-Los `.pdb` que acompañan al ejecutable permiten que los informes de crash muestren nombres de
-función y líneas; déjalos en la misma carpeta. `AudioFlowMatrix.exe --list` muestra los
-dispositivos ASIO y WASAPI detectados.
+Los informes de crash indican módulo y dirección del fallo; con los `.pdb` de esa misma
+compilación junto al ejecutable muestran también la función y la línea.
+`AudioFlowMatrix.exe --list` muestra los dispositivos ASIO y WASAPI detectados y qué DLL del driver
+se usa.
 
 Para probarlo paso a paso, consulta la [guía de prueba](docs/guia-de-prueba.md).
 
@@ -128,6 +134,10 @@ También funciona cualquier toolchain MinGW con Clang/GCC (incluido `zig c++`) c
 Ninja. Con zig, el proyecto fija `-mcpu=x86_64` (variable `AFM_TARGET_CPU_FLAGS`): sin eso zig
 compila para la CPU del equipo que compila y el programa falla con "instrucción ilegal" en otras
 CPUs. Las rutinas AVX2 se eligen en tiempo de ejecución.
+
+El ejecutable lleva dentro una copia de `AudioFlowMatrixASIO.dll` (recurso 101): si no encuentra
+la DLL a su lado, usa esa. Por eso el mismo `.exe` sirve como versión portable. Se compila como
+aplicación de ventana (subsistema GUI), así que no abre ninguna consola.
 
 ## Licencia
 
