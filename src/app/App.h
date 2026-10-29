@@ -101,6 +101,7 @@ private:
         midi::MidiBinding::Action action = midi::MidiBinding::Action::None;
         bool pttOpen = false;
     };
+    void listMidiDevices();
     void openMidi();
     void applyPttSettings();
     void pollMidi();

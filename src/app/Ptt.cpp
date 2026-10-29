@@ -58,6 +58,13 @@ void App::applyPttSettings() {
                settings_.pttToggle ? "toggle" : "hold", binding.describe().c_str());
 }
 
+void App::listMidiDevices() {
+    midiDevices_ = midi::MidiInput::list();
+    std::string names;
+    for (const auto& d : midiDevices_) names += (names.empty() ? "\"" : ", \"") + d.name + "\"";
+    log_.write("MIDI inputs found: %zu %s", midiDevices_.size(), names.c_str());
+}
+
 void App::openMidi() {
     midiIn_.close();
     ptt_->release(PushToTalk::Source::Midi);  // a pad held while switching ports must not stick
@@ -193,9 +200,21 @@ bool App::drawPttSettings() {
         }
         ImGui::EndCombo();
     }
+    // Re-scans the ports and reopens the selected one: picks up a controller plugged in (or
+    // unplugged and replugged) while the app was running.
+    ImGui::SameLine();
+    if (ImGui::Button("Refresh##midi")) {
+        log_.write("MIDI: refresh requested");
+        listMidiDevices();
+        openMidi();
+    }
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) {
+        ImGui::SetTooltip("Look for MIDI inputs again and reconnect the selected one.");
+    }
     if (midiDevices_.empty()) {
-        ImGui::SameLine();
-        ImGui::TextDisabled("No MIDI inputs found (connect one and press Refresh device lists).");
+        ImGui::TextDisabled("No MIDI inputs found: connect one and press Refresh.");
+    } else if (!settings_.midiDevice.empty() && midiIn_.isOpen()) {
+        ImGui::TextColored(ImVec4(0.3f, 0.85f, 0.4f, 1), "Listening to \"%s\".", midiIn_.deviceName().c_str());
     }
     if (!midiError_.empty()) ImGui::TextColored(ImVec4(0.95f, 0.65f, 0.2f, 1), "%s", midiError_.c_str());
 

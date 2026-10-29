@@ -81,10 +81,7 @@ void App::refreshDevices() {
     captureDevices_ = wasapi::listDevices(true);
     renderDevices_ = wasapi::listDevices(false);
     driverRegistered_ = virtualDriverRegistered();
-    midiDevices_ = midi::MidiInput::list();
-    std::string names;
-    for (const auto& d : midiDevices_) names += (names.empty() ? "\"" : ", \"") + d.name + "\"";
-    log_.write("MIDI inputs found: %zu %s", midiDevices_.size(), names.c_str());
+    listMidiDevices();
     if (settings_.driverName.empty() && !drivers_.empty()) {
         settings_.driverName = drivers_.front().name;
     }
