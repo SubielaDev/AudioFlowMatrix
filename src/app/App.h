@@ -1,12 +1,19 @@
 #pragma once
 
 #include "AsioHost.h"
+#include "Log.h"
 #include "VirtualAsioServer.h"
+#include "afm/core/SpscRingBuffer.h"
 #include "afm/engine/AudioEngine.h"
+#include "afm/engine/PushToTalk.h"
 #include "afm/engine/RoutingModel.h"
 #include "afm/platform/Win.h"
+#include "afm/midi/MidiInput.h"
+#include "afm/midi/MidiMessage.h"
 #include "afm/wasapi/WasapiEndpoints.h"
 
+#include <atomic>
+#include <deque>
 #include <memory>
 #include <string>
 #include <vector>
@@ -26,6 +33,10 @@ struct Settings {
     std::wstring streamId;
     bool streamExclusive = false;
     bool autoStart = true;
+    bool pttEnabled = false;   // push-to-talk on mic -> stream (optional, off by default)
+    bool pttToggle = false;    // false: hold to talk, true: each press toggles
+    std::string midiDevice;    // MIDI input port name; empty = none
+    std::string pttMidi = "none";  // MidiBinding::serialize()
 };
 
 // Group of consecutive bus channels that belong to one device, for display.
@@ -80,6 +91,20 @@ private:
     void drawMixer();
     void drawDevices();
     bool drawVoiceControls();
+    void drawPttButton();
+    bool drawPttSettings();
+
+    // ---- Push-to-talk and MIDI --------------------------------------------------------
+    struct MidiLogEntry {
+        std::uint32_t message = 0;
+        std::uint32_t timeMs = 0;
+        midi::MidiBinding::Action action = midi::MidiBinding::Action::None;
+        bool pttOpen = false;
+    };
+    void openMidi();
+    void applyPttSettings();
+    void pollMidi();
+    static void onMidi(void* user, std::uint32_t message, std::uint32_t timeMs) noexcept;  // WinMM thread
     void drawStatusBar();
     bool drawStrip(const char* id, const std::string& name, ChannelStrip& strip, const Meter& meter, unsigned color);
 
@@ -111,6 +136,20 @@ private:
 
     std::string error_;
     std::vector<std::string> warnings_;
+
+    Log log_;
+
+    // Shared with the engine (audio thread) and the MIDI thread; outlives audio restarts.
+    std::shared_ptr<PushToTalk> ptt_ = std::make_shared<PushToTalk>();
+    midi::MidiInput midiIn_;
+    std::vector<midi::MidiInput::Device> midiDevices_;
+    std::string midiError_;
+    std::atomic<std::uint32_t> pttBinding_{0};  // MidiBinding::pack(), read on the MIDI thread
+    std::atomic<bool> midiLearning_{false};
+    SpscRingBuffer<MidiLogEntry> midiEvents_{1024};  // MIDI thread -> GUI (log, monitor, learn)
+    std::atomic<std::uint64_t> midiDropped_{0};
+    std::deque<std::string> midiMonitor_;  // last messages, newest first
+    bool pttWasPassing_ = true;
 };
 
 } // namespace afm::app

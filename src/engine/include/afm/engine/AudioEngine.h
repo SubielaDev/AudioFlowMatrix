@@ -7,9 +7,11 @@
 #include "afm/core/TripleBuffer.h"
 #include "afm/dsp/MatrixMixer.h"
 #include "afm/engine/IAudioEndpoint.h"
+#include "afm/engine/PushToTalk.h"
 #include "afm/engine/Telemetry.h"
 
 #include <array>
+#include <bitset>
 #include <cstdint>
 #include <memory>
 #include <vector>
@@ -61,6 +63,19 @@ public:
     // block and ramps to them. Wait-free.
     void setMix(const dsp::MixCoefficients& coefficients) noexcept;
 
+    // ---- Push-to-talk ---------------------------------------------------------------
+    //
+    // Crosspoints from the PTT inputs to the PTT outputs (mic -> stream) follow the shared
+    // PushToTalk gate on top of their routing gain. The gate fades over kPttFadeSeconds,
+    // in per-block steps the mixer ramps between, so opening and closing never click.
+
+    static constexpr double kPttFadeSeconds = 0.010;
+
+    // Control thread, after prepare() and before the driver starts. `ptt` is read by the
+    // audio thread every block; it is shared so the GUI and MIDI threads can outlive us.
+    void setPtt(const std::bitset<kMaxInputs>& inputs, const std::bitset<kMaxOutputs>& outputs,
+                std::shared_ptr<const PushToTalk> ptt);
+
     // ---- Audio thread ---------------------------------------------------------------
 
     // hwIn/hwOut are the master driver's buffers, already converted to planar float.
@@ -74,6 +89,7 @@ private:
     void gatherInputs(ConstAudioBlock hwIn, std::uint32_t frames) noexcept;
     void scatterOutputs(AudioBlock hwOut, std::uint32_t frames) noexcept;
     void publishTelemetry(std::uint32_t frames, double elapsedSeconds) noexcept;
+    void updateMix(std::uint32_t frames) noexcept;
 
     Config config_{};
     bool prepared_ = false;
@@ -91,6 +107,14 @@ private:
 
     std::unique_ptr<dsp::MatrixMixer> mixer_;
     std::unique_ptr<TripleBuffer<dsp::MixCoefficients>> mix_;
+
+    // Latest published coefficients, and the copy with the PTT gate applied (audio thread).
+    std::unique_ptr<dsp::MixCoefficients> base_;
+    std::unique_ptr<dsp::MixCoefficients> gated_;
+    std::bitset<kMaxInputs> pttInputs_;
+    std::bitset<kMaxOutputs> pttOutputs_;
+    std::shared_ptr<const PushToTalk> ptt_;
+    float pttGain_ = 1.0f;
 
     SpscRingBuffer<TelemetryFrame> telemetry_;
     std::uint64_t blockIndex_ = 0;

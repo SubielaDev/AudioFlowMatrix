@@ -46,9 +46,14 @@ const ChannelGroup* findGroup(const std::vector<ChannelGroup>& groups, const std
 } // namespace
 
 App::App(HWND window) : window_(window) {
+    log_.open();
+    log_.write("AudioFlow Matrix %s started", AFM_VERSION_STRING);
+
     // First run never grabs the audio interface on its own: the user picks devices first.
     const bool configured = loadSettings();
     refreshDevices();
+    applyPttSettings();
+    openMidi();
 
     std::string error;
     if (!vasio_.open(error)) {
@@ -63,6 +68,7 @@ App::App(HWND window) : window_(window) {
 }
 
 App::~App() {
+    midiIn_.close();  // before the members its callback touches go away
     saveSettings();
     stopAudio();
     vasio_.close();
@@ -75,6 +81,10 @@ void App::refreshDevices() {
     captureDevices_ = wasapi::listDevices(true);
     renderDevices_ = wasapi::listDevices(false);
     driverRegistered_ = virtualDriverRegistered();
+    midiDevices_ = midi::MidiInput::list();
+    std::string names;
+    for (const auto& d : midiDevices_) names += (names.empty() ? "\"" : ", \"") + d.name + "\"";
+    log_.write("MIDI inputs found: %zu %s", midiDevices_.size(), names.c_str());
     if (settings_.driverName.empty() && !drivers_.empty()) {
         settings_.driverName = drivers_.front().name;
     }
@@ -141,6 +151,17 @@ bool App::startAudio() {
 
     rebuildLayout();
 
+    // Push-to-talk acts on every mic channel -> every stream channel crosspoint.
+    std::bitset<kMaxInputs> pttIn;
+    std::bitset<kMaxOutputs> pttOut;
+    if (const ChannelGroup* g = findGroup(inputGroups_, "Mic")) {
+        for (std::uint32_t k = 0; k < g->count; ++k) pttIn.set(g->begin + k);
+    }
+    if (const ChannelGroup* g = findGroup(outputGroups_, "Stream")) {
+        for (std::uint32_t k = 0; k < g->count; ++k) pttOut.set(g->begin + k);
+    }
+    engine_->setPtt(pttIn, pttOut, ptt_);
+
     if (!host_.start(*engine_, error)) {
         error_ = error;
         stopAudio();
@@ -149,10 +170,15 @@ bool App::startAudio() {
     vasio_.begin(rate, block, static_cast<std::uint32_t>(host_.inputLatency()),
                  static_cast<std::uint32_t>(host_.outputLatency()));
     running_ = true;
+    log_.write("Audio started: \"%s\", %.0f Hz, %u samples%s | mic: %s | stream: %s | PTT routes: %zu mic ch -> %zu stream ch",
+               host_.driverName().c_str(), rate, block, host_.bufferSizeFallback() ? " (fallback)" : "",
+               mic_ ? mic_->info().format.c_str() : "off", stream_ ? stream_->info().format.c_str() : "off",
+               pttIn.count(), pttOut.count());
     return true;
 }
 
 void App::stopAudio() {
+    if (running_) log_.write("Audio stopped");
     vasio_.end();
     host_.stop();  // no more callbacks after this returns
     mic_.reset();
@@ -287,6 +313,7 @@ void App::frame() {
         settingsDirty_ = false;
     }
     pollTelemetry();
+    pollMidi();
 
     const ImGuiViewport* vp = ImGui::GetMainViewport();
     ImGui::SetNextWindowPos(vp->WorkPos);
@@ -361,6 +388,10 @@ bool App::loadSettings() {
         else if (key == "stream.id") settings_.streamId = win::toWide(value);
         else if (key == "stream.exclusive") settings_.streamExclusive = value == "1";
         else if (key == "autostart") settings_.autoStart = value == "1";
+        else if (key == "ptt.enabled") settings_.pttEnabled = value == "1";
+        else if (key == "ptt.toggle") settings_.pttToggle = value == "1";
+        else if (key == "ptt.midi") settings_.pttMidi = midi::MidiBinding::parse(value).serialize();
+        else if (key == "midi.device") settings_.midiDevice = value;
     }
     routing_.load(routingLines);
     return true;
@@ -380,7 +411,11 @@ void App::saveSettings() const {
         << "stream.enabled=" << settings_.streamEnabled << '\n'
         << "stream.id=" << win::toUtf8(settings_.streamId) << '\n'
         << "stream.exclusive=" << settings_.streamExclusive << '\n'
-        << "autostart=" << settings_.autoStart << '\n';
+        << "autostart=" << settings_.autoStart << '\n'
+        << "ptt.enabled=" << settings_.pttEnabled << '\n'
+        << "ptt.toggle=" << settings_.pttToggle << '\n'
+        << "ptt.midi=" << settings_.pttMidi << '\n'
+        << "midi.device=" << settings_.midiDevice << '\n';
     routing_.save(out);
 }
 

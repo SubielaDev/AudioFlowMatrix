@@ -155,6 +155,10 @@ void App::drawToolbar() {
     } else {
         ImGui::TextDisabled(driverRegistered_ ? "ASIO client: waiting for Traktor/DAW" : "Virtual ASIO driver not registered");
     }
+    if (settings_.pttEnabled) {
+        ImGui::SameLine(0, 24 * s);
+        drawPttButton();
+    }
     ImGui::EndGroup();
     ImGui::Spacing();
 }
@@ -446,6 +450,8 @@ void App::drawDevices() {
         if (stream_->deviceLost()) ImGui::TextColored(ImVec4(0.95f, 0.4f, 0.3f, 1), "Device disconnected. Press Apply to reopen.");
     }
 
+    changed |= drawPttSettings();
+
     ImGui::SeparatorText("General");
     changed |= ImGui::Checkbox("Start audio when AudioFlow Matrix opens", &settings_.autoStart);
     ImGui::Spacing();
@@ -456,7 +462,10 @@ void App::drawDevices() {
     }
     ImGui::PopStyleColor();
     ImGui::SameLine();
-    if (ImGui::Button("Refresh device lists")) refreshDevices();
+    if (ImGui::Button("Refresh device lists")) {
+        refreshDevices();
+        if (!midiIn_.isOpen()) openMidi();  // a MIDI controller plugged in after start-up
+    }
     ImGui::SameLine();
     if (ImGui::Button("Clear all routes")) {
         routing_.clearRoutes();

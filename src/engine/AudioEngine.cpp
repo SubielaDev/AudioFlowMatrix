@@ -28,6 +28,8 @@ float peakOf(const float* samples, std::uint32_t frames) noexcept {
 AudioEngine::AudioEngine()
     : mixer_(std::make_unique<dsp::MatrixMixer>()),
       mix_(std::make_unique<TripleBuffer<dsp::MixCoefficients>>()),
+      base_(std::make_unique<dsp::MixCoefficients>()),
+      gated_(std::make_unique<dsp::MixCoefficients>()),
       telemetry_(kTelemetryCapacity) {}
 
 AudioEngine::~AudioEngine() = default;
@@ -103,9 +105,7 @@ void AudioEngine::process(ConstAudioBlock hwIn, AudioBlock hwOut) noexcept {
     // Drivers may deliver a different block size than negotiated; clamp to scratch size.
     const std::uint32_t frames = std::min(hwOut.numFrames, kMaxBlockFrames);
 
-    if (mix_->update()) {
-        mixer_->setTarget(mix_->front());
-    }
+    updateMix(frames);
 
     gatherInputs(hwIn, frames);
     mixer_->process(inputLanes_.data(), totalInputs_, outputLanes_.data(), totalOutputs_, frames);
@@ -134,6 +134,42 @@ void AudioEngine::gatherInputs(ConstAudioBlock hwIn, std::uint32_t frames) noexc
 void AudioEngine::setMix(const dsp::MixCoefficients& coefficients) noexcept {
     mix_->back() = coefficients;
     mix_->publish();
+}
+
+void AudioEngine::setPtt(const std::bitset<kMaxInputs>& inputs, const std::bitset<kMaxOutputs>& outputs,
+                         std::shared_ptr<const PushToTalk> ptt) {
+    pttInputs_ = inputs;
+    pttOutputs_ = outputs;
+    ptt_ = std::move(ptt);
+    pttGain_ = (ptt_ == nullptr || ptt_->passing()) ? 1.0f : 0.0f;  // no fade on the first block
+}
+
+void AudioEngine::updateMix(std::uint32_t frames) noexcept {
+    const bool fresh = mix_->update();
+    if (ptt_ == nullptr || pttInputs_.none() || pttOutputs_.none()) {
+        if (fresh) mixer_->setTarget(mix_->front());
+        return;
+    }
+    if (fresh) *base_ = mix_->front();
+    if (base_->numInputs == 0) return;  // nothing published yet
+
+    const float target = ptt_->passing() ? 1.0f : 0.0f;
+    if (!fresh && pttGain_ == target) return;
+    if (pttGain_ != target) {
+        const auto step = static_cast<float>(frames / (kPttFadeSeconds * config_.format.sampleRate));
+        pttGain_ = target > pttGain_ ? std::min(target, pttGain_ + step) : std::max(target, pttGain_ - step);
+    }
+
+    dsp::MixCoefficients& g = *gated_;
+    g.numInputs = base_->numInputs;
+    g.numOutputs = base_->numOutputs;
+    for (std::uint32_t o = 0; o < g.numOutputs; ++o) {
+        const bool pttOut = pttOutputs_.test(o);
+        for (std::uint32_t i = 0; i < g.numInputs; ++i) {
+            g.gain[o][i] = (pttOut && pttInputs_.test(i)) ? base_->gain[o][i] * pttGain_ : base_->gain[o][i];
+        }
+    }
+    mixer_->setTarget(g);
 }
 
 void AudioEngine::scatterOutputs(AudioBlock hwOut, std::uint32_t frames) noexcept {

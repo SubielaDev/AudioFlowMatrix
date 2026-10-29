@@ -50,6 +50,7 @@ add_subdirectory(src/core)       # afm::core     lock-free rings, triple buffer,
 add_subdirectory(third_party/rnnoise)  # afm::rnnoise  RNNoise speech denoiser (C)
 add_subdirectory(src/dsp)        # afm::dsp      AVX2 matrix mixer, drift resampler, voice processing
 add_subdirectory(src/engine)     # afm::engine   AudioEngine, endpoints, routing model
+add_subdirectory(src/midi)       # afm::midi     MIDI decoding (portable) + WinMM input
 
 if(WIN32)
     add_subdirectory(src/platform)   # afm::platform  Win32 helpers (COM, MMCSS, UTF-8)

@@ -4,11 +4,14 @@ add_executable(AudioFlowMatrix WIN32
     Gui.cpp
     Brand.cpp
     CrashReport.cpp
+    Log.cpp
+    Ptt.cpp
     app.rc)
 
 target_link_libraries(AudioFlowMatrix PRIVATE
     afm::asio_host
     afm::wasapi
+    afm::midi
     imgui
     shell32
     dbghelp)
