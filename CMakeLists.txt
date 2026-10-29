@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.25)
 project(AudioFlowMatrix
     VERSION 0.2.0
     DESCRIPTION "Low-latency ASIO/WASAPI routing matrix for Windows"
-    LANGUAGES CXX RC)
+    LANGUAGES C CXX RC)
 
 if(NOT WIN32)
     message(WARNING "AudioFlow Matrix targets Windows. Only the portable core and tests build elsewhere.")
@@ -47,7 +47,8 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(AfmCompilerOptions)
 
 add_subdirectory(src/core)       # afm::core     lock-free rings, triple buffer, aligned memory
-add_subdirectory(src/dsp)        # afm::dsp      AVX2 matrix mixer, drift resampler
+add_subdirectory(third_party/rnnoise)  # afm::rnnoise  RNNoise speech denoiser (C)
+add_subdirectory(src/dsp)        # afm::dsp      AVX2 matrix mixer, drift resampler, voice processing
 add_subdirectory(src/engine)     # afm::engine   AudioEngine, endpoints, routing model
 
 if(WIN32)

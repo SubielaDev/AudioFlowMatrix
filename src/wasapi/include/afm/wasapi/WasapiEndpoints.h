@@ -2,6 +2,7 @@
 
 #include "afm/core/AudioRingBuffer.h"
 #include "afm/dsp/DriftResampler.h"
+#include "afm/dsp/VoiceProcessor.h"
 #include "afm/engine/IAudioEndpoint.h"
 #include "afm/platform/Win.h"
 
@@ -28,6 +29,11 @@ struct StreamConfig {
     bool exclusive = true;      // falls back to shared mode if exclusive is refused
     double engineRate = 48000.0;
     std::uint32_t engineBlockFrames = 128;
+
+    // Capture only: initial voice-processing settings, applied before the stream starts.
+    bool denoise = false;
+    bool gate = false;
+    float gateThresholdDb = -45.0f;
 };
 
 // What the device thread actually negotiated. Written before open() returns.
@@ -42,8 +48,8 @@ struct StreamInfo {
 class WasapiStream;
 
 // USB mic (or any capture device) as a matrix input. A device thread captures in the
-// device's own clock domain into a ring; the engine pulls through a DriftResampler that
-// locks it to the master ASIO clock.
+// device's own clock domain, runs the VoiceProcessor (denoise + gate) and writes into a
+// ring; the engine pulls through a DriftResampler that locks it to the master ASIO clock.
 class WasapiInputEndpoint final : public IInputEndpoint {
 public:
     [[nodiscard]] static std::shared_ptr<WasapiInputEndpoint> open(const StreamConfig& config, std::string& error);
@@ -56,6 +62,7 @@ public:
 
     [[nodiscard]] const StreamInfo& info() const noexcept;
     [[nodiscard]] const dsp::DriftResampler& resampler() const noexcept { return resampler_; }
+    [[nodiscard]] dsp::VoiceProcessor& voice() noexcept { return *voice_; }
     [[nodiscard]] bool deviceLost() const noexcept;
 
 private:
@@ -65,6 +72,7 @@ private:
     std::uint32_t channels_ = 0;
     std::unique_ptr<AudioRingBuffer> ring_;
     dsp::DriftResampler resampler_;
+    std::unique_ptr<dsp::VoiceProcessor> voice_;
     std::unique_ptr<WasapiStream> stream_;
 };
 

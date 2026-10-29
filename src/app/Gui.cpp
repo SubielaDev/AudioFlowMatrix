@@ -422,6 +422,7 @@ void App::drawDevices() {
                     static_cast<unsigned long long>(mic_->resampler().dropouts()));
         if (mic_->deviceLost()) ImGui::TextColored(ImVec4(0.95f, 0.4f, 0.3f, 1), "Device disconnected. Press Apply to reopen.");
     }
+    changed |= drawVoiceControls();
 
     ImGui::SeparatorText("Stream output for Discord / OBS (WASAPI)");
     changed |= ImGui::Checkbox("Enable##stream", &settings_.streamEnabled);
@@ -457,6 +458,57 @@ void App::drawDevices() {
     }
 
     if (changed) settingsDirty_ = true;
+}
+
+// ---- Voice processing (mic) --------------------------------------------------------------
+
+// Denoise / gate settings apply live: the capture thread reads them from atomics.
+bool App::drawVoiceControls() {
+    const float s = scale();
+    bool changed = false;
+    dsp::VoiceProcessor* voice = mic_ ? &mic_->voice() : nullptr;
+    const bool denoiseAvailable = voice == nullptr || voice->denoiseAvailable();
+
+    ImGui::BeginDisabled(!denoiseAvailable);
+    if (ImGui::Checkbox("Denoise (RNNoise)", &settings_.micDenoise)) {
+        changed = true;
+        if (voice) voice->setDenoise(settings_.micDenoise);
+    }
+    ImGui::EndDisabled();
+    ImGui::SameLine(0, 20 * s);
+    if (ImGui::Checkbox("Gate", &settings_.micGate)) {
+        changed = true;
+        if (voice) voice->setGate(settings_.micGate);
+    }
+    ImGui::SameLine(0, 20 * s);
+    ImGui::SetNextItemWidth(220 * s);
+    if (ImGui::SliderFloat("Threshold", &settings_.micGateThresholdDb, dsp::NoiseGate::kMinThresholdDb,
+                           dsp::NoiseGate::kMaxThresholdDb, "%.0f dB")) {
+        changed = true;
+        if (voice) voice->setGateThresholdDb(settings_.micGateThresholdDb);
+    }
+
+    if (voice == nullptr) return changed;
+    if (!denoiseAvailable) {
+        ImGui::TextColored(ImVec4(0.95f, 0.65f, 0.2f, 1), "Denoise needs the mic at 48000 Hz; this device runs at %.0f Hz.",
+                           mic_->info().deviceRate);
+    }
+    statusDot(voice->gateOpen() || !settings_.micGate, true);
+    ImGui::AlignTextToFramePadding();
+    if (settings_.micGate) {
+        const float gain = voice->gateGain();
+        const float gainDb = gain > 1e-3f ? 20.0f * std::log10(gain) : -60.0f;
+        ImGui::Text("Gate %s (%.0f dB)", voice->gateOpen() ? "open" : "closed", gainDb);
+    } else {
+        ImGui::TextDisabled("Gate off");
+    }
+    if (denoiseAvailable) {
+        ImGui::SameLine(0, 24 * s);
+        ImGui::Text("Voice %3.0f%%", voice->voiceProbability() * 100.0f);
+        ImGui::SameLine(0, 24 * s);
+        ImGui::TextDisabled("+%.0f ms latency", voice->latencyFrames() * 1000.0 / mic_->info().deviceRate);
+    }
+    return changed;
 }
 
 // ---- Status bar ---------------------------------------------------------------------------

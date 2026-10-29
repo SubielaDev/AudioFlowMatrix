@@ -107,6 +107,9 @@ bool App::startAudio() {
     }
     if (settings_.micEnabled && !settings_.micId.empty()) {
         wasapi::StreamConfig cfg{settings_.micId, "Mic", settings_.micExclusive, rate, block};
+        cfg.denoise = settings_.micDenoise;
+        cfg.gate = settings_.micGate;
+        cfg.gateThresholdDb = settings_.micGateThresholdDb;
         if ((mic_ = wasapi::WasapiInputEndpoint::open(cfg, error))) {
             engine_->addInput(mic_);
         } else {
@@ -345,6 +348,9 @@ bool App::loadSettings() {
         else if (key == "mic.enabled") settings_.micEnabled = value == "1";
         else if (key == "mic.id") settings_.micId = win::toWide(value);
         else if (key == "mic.exclusive") settings_.micExclusive = value == "1";
+        else if (key == "mic.denoise") settings_.micDenoise = value == "1";
+        else if (key == "mic.gate") settings_.micGate = value == "1";
+        else if (key == "mic.gate.threshold") settings_.micGateThresholdDb = std::strtof(value.c_str(), nullptr);
         else if (key == "stream.enabled") settings_.streamEnabled = value == "1";
         else if (key == "stream.id") settings_.streamId = win::toWide(value);
         else if (key == "stream.exclusive") settings_.streamExclusive = value == "1";
@@ -362,6 +368,9 @@ void App::saveSettings() const {
         << "mic.enabled=" << settings_.micEnabled << '\n'
         << "mic.id=" << win::toUtf8(settings_.micId) << '\n'
         << "mic.exclusive=" << settings_.micExclusive << '\n'
+        << "mic.denoise=" << settings_.micDenoise << '\n'
+        << "mic.gate=" << settings_.micGate << '\n'
+        << "mic.gate.threshold=" << settings_.micGateThresholdDb << '\n'
         << "stream.enabled=" << settings_.streamEnabled << '\n'
         << "stream.id=" << win::toUtf8(settings_.streamId) << '\n'
         << "stream.exclusive=" << settings_.streamExclusive << '\n'

@@ -299,7 +299,10 @@ private:
         const DWORD mixRate = mix->nSamplesPerSec;
 
         if (config_.exclusive) {
-            const DWORD rates[] = {static_cast<DWORD>(config_.engineRate), mixRate, 48000, 44100, 96000};
+            // The engine rate first (no rate conversion), unless the denoiser needs 48 kHz; the
+            // drift resampler converts whatever rate the device ends up at.
+            const DWORD first = config_.denoise ? 48000 : static_cast<DWORD>(config_.engineRate);
+            const DWORD rates[] = {first, static_cast<DWORD>(config_.engineRate), mixRate, 48000, 44100, 96000};
             const std::uint16_t channelOptions[] = {mixChannels, 2, 1};
             struct Kind { SampleKind kind; std::uint16_t validBits; };
             const Kind kinds[] = {{SampleKind::Int32, 24}, {SampleKind::Int32, 32}, {SampleKind::Int24, 24},
@@ -509,8 +512,16 @@ std::shared_ptr<WasapiInputEndpoint> WasapiInputEndpoint::open(const StreamConfi
     ep->ring_ = std::make_unique<AudioRingBuffer>(ep->channels_, target * 4 + 4096);
     ep->resampler_.prepare(ep->channels_, info.deviceRate, config.engineRate, target, kMaxBlockFrames);
 
+    ep->voice_ = std::make_unique<dsp::VoiceProcessor>();
+    ep->voice_->setDenoise(config.denoise);
+    ep->voice_->setGate(config.gate);
+    ep->voice_->setGateThresholdDb(config.gateThresholdDb);
+    ep->voice_->prepare(ep->channels_, info.deviceRate);
+
     AudioRingBuffer* ring = ep->ring_.get();
-    ep->stream_->run(ep->channels_, [ring](float* const* lanes, std::uint32_t channels, std::uint32_t frames) {
+    dsp::VoiceProcessor* voice = ep->voice_.get();
+    ep->stream_->run(ep->channels_, [ring, voice](float* const* lanes, std::uint32_t channels, std::uint32_t frames) {
+        voice->process(AudioBlock{lanes, channels, frames});
         ring->write(ConstAudioBlock{lanes, channels, frames});
     });
     return ep;

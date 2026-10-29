@@ -19,6 +19,9 @@ struct Settings {
     bool micEnabled = false;
     std::wstring micId;
     bool micExclusive = true;
+    bool micDenoise = false;
+    bool micGate = false;
+    float micGateThresholdDb = -45.0f;
     bool streamEnabled = false;
     std::wstring streamId;
     bool streamExclusive = false;
@@ -76,6 +79,7 @@ private:
     void drawMatrix();
     void drawMixer();
     void drawDevices();
+    bool drawVoiceControls();
     void drawStatusBar();
     bool drawStrip(const char* id, const std::string& name, ChannelStrip& strip, const Meter& meter, unsigned color);
 
