@@ -16,8 +16,6 @@ namespace afm::app {
 
 namespace {
 
-constexpr wchar_t kVirtualDriverKey[] = L"SOFTWARE\\ASIO\\AudioFlow Matrix ASIO";
-
 std::wstring exeDirectory() {
     wchar_t path[MAX_PATH] = {};
     GetModuleFileNameW(nullptr, path, MAX_PATH);
@@ -80,7 +78,12 @@ void App::refreshDevices() {
     drivers_ = asio::listDrivers();
     captureDevices_ = wasapi::listDevices(true);
     renderDevices_ = wasapi::listDevices(false);
-    driverRegistered_ = virtualDriverRegistered();
+    std::string driverError;
+    driverDll_ = driver::dllPath(driverError);
+    if (!driverError.empty()) warnings_.push_back(driverError);
+    driverStatus_ = driver::status(driverDll_);
+    log_.write("Virtual ASIO driver: %s | registered from: %s", win::toUtf8(driverDll_).c_str(),
+               win::toUtf8(driver::registeredPath()).c_str());
     listMidiDevices();
     if (settings_.driverName.empty() && !drivers_.empty()) {
         settings_.driverName = drivers_.front().name;
@@ -433,19 +436,12 @@ void App::saveSettings() const {
 
 // ---- Virtual driver registration ------------------------------------------------------------
 
-bool App::virtualDriverRegistered() {
-    HKEY key = nullptr;
-    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, kVirtualDriverKey, 0, KEY_READ | KEY_WOW64_64KEY, &key) != ERROR_SUCCESS) {
-        return false;
-    }
-    RegCloseKey(key);
-    return true;
-}
-
 void App::registerVirtualDriver(bool install) {
-    const std::wstring dll = exeDirectory() + L"\\AudioFlowMatrixASIO.dll";
-    if (GetFileAttributesW(dll.c_str()) == INVALID_FILE_ATTRIBUTES) {
-        error_ = "AudioFlowMatrixASIO.dll was not found next to the executable.";
+    // Unregistering through our own DLL works whichever copy is registered: it removes the
+    // driver's registry keys, not just its own path.
+    const std::wstring& dll = driverDll_;
+    if (dll.empty()) {
+        error_ = "The virtual ASIO driver DLL is not available.";
         return;
     }
     const std::wstring params = std::wstring(install ? L"/s \"" : L"/u /s \"") + dll + L"\"";
@@ -465,8 +461,12 @@ void App::registerVirtualDriver(bool install) {
         WaitForSingleObject(sei.hProcess, 30000);
         CloseHandle(sei.hProcess);
     }
-    driverRegistered_ = virtualDriverRegistered();
-    if (install && !driverRegistered_) {
+    driverStatus_ = driver::status(driverDll_);
+    log_.write("Virtual ASIO driver %s -> %s", install ? "register" : "unregister",
+               driverStatus_ == driver::Status::Registered        ? "registered"
+               : driverStatus_ == driver::Status::NotRegistered ? "not registered"
+                                                                 : "registered from another copy");
+    if (install && driverStatus_ != driver::Status::Registered) {
         error_ = "Driver registration failed.";
     }
 }

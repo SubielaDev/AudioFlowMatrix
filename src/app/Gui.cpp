@@ -153,7 +153,8 @@ void App::drawToolbar() {
     if (client) {
         ImGui::Text("ASIO client connected (PID %u)", vasio_.clientPid());
     } else {
-        ImGui::TextDisabled(driverRegistered_ ? "ASIO client: waiting for Traktor/DAW" : "Virtual ASIO driver not registered");
+        ImGui::TextDisabled(driverStatus_ != driver::Status::NotRegistered ? "ASIO client: waiting for Traktor/DAW"
+                                                                          : "Virtual ASIO driver not registered");
     }
     if (settings_.pttEnabled) {
         ImGui::SameLine(0, 24 * s);
@@ -402,8 +403,18 @@ void App::drawDevices() {
     ImGui::TextDisabled("Buffer size is set in the interface's own control panel.");
 
     ImGui::SeparatorText("Virtual ASIO driver for Traktor / DAWs");
-    if (driverRegistered_) {
+    if (driverStatus_ == driver::Status::Registered) {
         ImGui::TextColored(ImVec4(0.3f, 0.85f, 0.4f, 1), "\"AudioFlow Matrix ASIO\" is registered.");
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Unregister")) registerVirtualDriver(false);
+    } else if (driverStatus_ == driver::Status::RegisteredOther) {
+        // E.g. registered by the installer and now running the portable .exe, or the folder moved.
+        const std::wstring other = driver::registeredPath();
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.95f, 0.65f, 0.2f, 1));
+        ImGui::TextWrapped("The driver is registered from another copy of AudioFlow Matrix: %s",
+                           other.empty() ? "(file missing)" : win::toUtf8(other).c_str());
+        ImGui::PopStyleColor();
+        if (ImGui::Button("Use this copy (administrator)")) registerVirtualDriver(true);
         ImGui::SameLine();
         if (ImGui::SmallButton("Unregister")) registerVirtualDriver(false);
     } else {

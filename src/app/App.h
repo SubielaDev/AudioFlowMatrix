@@ -1,6 +1,7 @@
 #pragma once
 
 #include "AsioHost.h"
+#include "Driver.h"
 #include "Log.h"
 #include "VirtualAsioServer.h"
 #include "afm/core/SpscRingBuffer.h"
@@ -85,7 +86,6 @@ private:
     void saveSettings() const;
 
     // ---- Virtual driver registration ----------------------------------------------
-    [[nodiscard]] static bool virtualDriverRegistered();
     void registerVirtualDriver(bool install);
 
     // ---- UI --------------------------------------------------------------------------
@@ -123,7 +123,8 @@ private:
     std::vector<asio::DriverEntry> drivers_;
     std::vector<wasapi::DeviceInfo> captureDevices_;
     std::vector<wasapi::DeviceInfo> renderDevices_;
-    bool driverRegistered_ = false;
+    std::wstring driverDll_;  // the virtual driver DLL this executable uses (next to it, or unpacked)
+    driver::Status driverStatus_ = driver::Status::NotRegistered;
 
     asio::AsioHost host_;
     asio::VirtualAsioServer vasio_;

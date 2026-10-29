@@ -80,13 +80,22 @@ LRESULT WINAPI wndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 }
 
 int listDevices() {
-    AttachConsole(ATTACH_PARENT_PROCESS);
+    // A GUI-subsystem app has no console of its own: print into the caller's, unless the
+    // output is already redirected to a file or pipe.
+    const HANDLE out = GetStdHandle(STD_OUTPUT_HANDLE);
+    if ((out == nullptr || out == INVALID_HANDLE_VALUE) && AttachConsole(ATTACH_PARENT_PROCESS)) {
+        std::freopen("CONOUT$", "w", stdout);
+    }
     std::printf("ASIO drivers:\n");
     for (const auto& d : afm::asio::listDrivers()) std::printf("  %s\n", d.name.c_str());
     std::printf("WASAPI capture devices:\n");
     for (const auto& d : afm::wasapi::listDevices(true)) std::printf("  %s\n", d.name.c_str());
     std::printf("WASAPI render devices:\n");
     for (const auto& d : afm::wasapi::listDevices(false)) std::printf("  %s\n", d.name.c_str());
+    std::string error;
+    const std::wstring dll = afm::app::driver::dllPath(error);
+    std::printf("Virtual ASIO driver DLL: %s%s\n", afm::win::toUtf8(dll).c_str(), error.c_str());
+    std::printf("Registered from: %s\n", afm::win::toUtf8(afm::app::driver::registeredPath()).c_str());
     std::fflush(stdout);
     return 0;
 }
