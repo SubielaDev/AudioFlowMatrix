@@ -9,6 +9,7 @@
 #include "afm/engine/RoutingModel.h"
 #include "afm/platform/Win.h"
 #include "afm/midi/MidiInput.h"
+#include "afm/midi/MidiMap.h"
 #include "afm/midi/MidiMessage.h"
 #include "afm/wasapi/WasapiEndpoints.h"
 
@@ -36,7 +37,7 @@ struct Settings {
     bool pttEnabled = false;   // push-to-talk on mic -> stream (optional, off by default)
     bool pttToggle = false;    // false: hold to talk, true: each press toggles
     std::string midiDevice;    // MIDI input port name; empty = none
-    std::string pttMidi = "none";  // MidiBinding::serialize()
+    midi::MidiMap midiMap;     // MIDI controls -> PTT / channel mutes
 };
 
 // Group of consecutive bus channels that belong to one device, for display.
@@ -64,6 +65,8 @@ public:
 
     // One GUI frame: housekeeping + ImGui drawing.
     void frame();
+    // While the window is minimised (no frames): keeps MIDI mappings working.
+    void idle();
 
 private:
     // ---- Audio lifecycle -----------------------------------------------------------
@@ -93,6 +96,7 @@ private:
     bool drawVoiceControls();
     void drawPttButton();
     bool drawPttSettings();
+    void drawMidi();
 
     // ---- Push-to-talk and MIDI --------------------------------------------------------
     struct MidiLogEntry {
@@ -105,6 +109,11 @@ private:
     void openMidi();
     void applyPttSettings();
     void pollMidi();
+    void applyMidiAction(const std::string& target, const midi::MidiEvent& event);
+    void startMidiLearn(const std::string& target);
+    void cancelMidiLearn();
+    void clearMidiMapping(const std::string& target);
+    void syncPttBinding();
     static void onMidi(void* user, std::uint32_t message, std::uint32_t timeMs) noexcept;  // WinMM thread
     void drawStatusBar();
     bool drawStrip(const char* id, const std::string& name, ChannelStrip& strip, const Meter& meter, unsigned color);
@@ -146,7 +155,8 @@ private:
     std::vector<midi::MidiInput::Device> midiDevices_;
     std::string midiError_;
     std::atomic<std::uint32_t> pttBinding_{0};  // MidiBinding::pack(), read on the MIDI thread
-    std::atomic<bool> midiLearning_{false};
+    std::atomic<bool> midiLearning_{false};  // MIDI thread: don't act while learning
+    std::string midiLearnTarget_;             // GUI thread: what the next control gets mapped to
     SpscRingBuffer<MidiLogEntry> midiEvents_{1024};  // MIDI thread -> GUI (log, monitor, learn)
     std::atomic<std::uint64_t> midiDropped_{0};
     std::deque<std::string> midiMonitor_;  // last messages, newest first

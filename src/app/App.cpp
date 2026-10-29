@@ -296,10 +296,20 @@ void App::pollTelemetry() {
 
 // ---- Frame --------------------------------------------------------------------------------
 
+void App::idle() {
+    pollMidi();
+    if (routingDirty_) {
+        publishMix();
+        routingDirty_ = false;
+        saveSettings();
+    }
+}
+
 void App::frame() {
     if (running_ && host_.takeResetRequest()) {
         restartAudio();  // the driver changed buffer size / rate
     }
+    pollMidi();  // before publishing, so MIDI mutes reach the audio this frame
     if (routingDirty_) {
         publishMix();
         routingDirty_ = false;
@@ -310,7 +320,6 @@ void App::frame() {
         settingsDirty_ = false;
     }
     pollTelemetry();
-    pollMidi();
 
     const ImGuiViewport* vp = ImGui::GetMainViewport();
     ImGui::SetNextWindowPos(vp->WorkPos);
@@ -332,6 +341,10 @@ void App::frame() {
                 }
                 if (ImGui::BeginTabItem("Devices")) {
                     drawDevices();
+                    ImGui::EndTabItem();
+                }
+                if (ImGui::BeginTabItem("MIDI")) {
+                    drawMidi();
                     ImGui::EndTabItem();
                 }
                 ImGui::EndTabBar();
@@ -387,7 +400,9 @@ bool App::loadSettings() {
         else if (key == "autostart") settings_.autoStart = value == "1";
         else if (key == "ptt.enabled") settings_.pttEnabled = value == "1";
         else if (key == "ptt.toggle") settings_.pttToggle = value == "1";
-        else if (key == "ptt.midi") settings_.pttMidi = midi::MidiBinding::parse(value).serialize();
+        else if (key == "midimap") settings_.midiMap.load(value);
+        // Before the MIDI tab, the PTT mapping had a key of its own.
+        else if (key == "ptt.midi") settings_.midiMap.assign(midi::MidiMap::pttTarget(), midi::MidiBinding::parse(value));
         else if (key == "midi.device") settings_.midiDevice = value;
     }
     routing_.load(routingLines);
@@ -411,8 +426,8 @@ void App::saveSettings() const {
         << "autostart=" << settings_.autoStart << '\n'
         << "ptt.enabled=" << settings_.pttEnabled << '\n'
         << "ptt.toggle=" << settings_.pttToggle << '\n'
-        << "ptt.midi=" << settings_.pttMidi << '\n'
         << "midi.device=" << settings_.midiDevice << '\n';
+    for (const auto& entry : settings_.midiMap.entries()) out << "midimap=" << midi::MidiMap::serialize(entry) << '\n';
     routing_.save(out);
 }
 

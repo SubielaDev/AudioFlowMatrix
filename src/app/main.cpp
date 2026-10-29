@@ -176,7 +176,8 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR cmdLine, int) {
             }
             if (done) break;
             if (IsIconic(hwnd)) {
-                Sleep(16);  // audio keeps running; just don't draw
+                app->idle();  // audio and MIDI mappings keep running; just don't draw
+                Sleep(16);
                 continue;
             }
 

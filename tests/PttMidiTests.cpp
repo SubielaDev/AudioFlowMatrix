@@ -4,6 +4,7 @@
 #include "afm/engine/AudioEngine.h"
 #include "afm/engine/PushToTalk.h"
 #include "afm/engine/RingEndpoints.h"
+#include "afm/midi/MidiMap.h"
 #include "afm/midi/MidiMessage.h"
 
 #include <algorithm>
@@ -90,6 +91,53 @@ void testBindings() {
         AFM_CHECK(MidiBinding::parse(bad).type == MidiBinding::Type::None);
     }
     AFM_CHECK(afm::midi::describe(shortMsg(0x90, 36, 100)).find("Note On") == 0);
+}
+
+// ---- MIDI map --------------------------------------------------------------------------------
+
+void testMidiMap() {
+    using afm::midi::MidiMap;
+    const MidiBinding padA{MidiBinding::Type::Note, 0, 36};
+    const MidiBinding padB{MidiBinding::Type::Note, 0, 37};
+    const MidiBinding knob{MidiBinding::Type::ControlChange, 9, 20};
+    const std::string ptt = MidiMap::pttTarget();
+    const std::string micMute = MidiMap::inputMuteTarget("Mic L");
+    const std::string streamMute = MidiMap::outputMuteTarget("Stream L");
+
+    MidiMap map;
+    map.assign(ptt, padA);
+    map.assign(micMute, padB);
+    map.assign(streamMute, knob);
+    AFM_CHECK(map.entries().size() == 3);
+    AFM_CHECK(map.bindingFor(micMute) == padB);
+    AFM_CHECK(*map.targetFor(parseShortMessage(shortMsg(0x90, 37, 100))) == micMute);
+    AFM_CHECK(*map.targetFor(parseShortMessage(shortMsg(0x80, 37, 0))) == micMute);       // release still identifies it
+    AFM_CHECK(*map.targetFor(parseShortMessage(shortMsg(0xB9, 20, 0))) == streamMute);
+    AFM_CHECK(map.targetFor(parseShortMessage(shortMsg(0x90, 40, 100))) == nullptr);
+
+    // One control drives one target: learning padA for the mic mute takes it off PTT.
+    map.assign(micMute, padA);
+    AFM_CHECK(map.bindingFor(ptt).type == MidiBinding::Type::None);
+    AFM_CHECK(map.bindingFor(micMute) == padA);
+    AFM_CHECK(map.targetFor(parseShortMessage(shortMsg(0x90, 37, 100))) == nullptr);  // padB freed
+    AFM_CHECK(map.entries().size() == 2);
+
+    // Assigning None, or clearing, removes the mapping.
+    map.assign(streamMute, MidiBinding{});
+    AFM_CHECK(map.bindingFor(streamMute).type == MidiBinding::Type::None);
+    map.clear(micMute);
+    AFM_CHECK(map.entries().empty());
+
+    // settings.ini round trip, including a channel name with the separator in it.
+    MidiMap saved;
+    saved.assign(ptt, padB);
+    saved.assign(MidiMap::inputMuteTarget("Deck A|B"), knob);
+    MidiMap loaded;
+    for (const auto& e : saved.entries()) loaded.load(MidiMap::serialize(e));
+    for (const char* bad : {"", "note:1:36", "|mute.in:x", "note:1:36|", "bogus|ptt"}) loaded.load(bad);
+    AFM_CHECK(loaded.entries().size() == 2);
+    AFM_CHECK(loaded.bindingFor(ptt) == padB);
+    AFM_CHECK(loaded.bindingFor(MidiMap::inputMuteTarget("Deck A|B")) == knob);
 }
 
 // ---- Push-to-talk state ------------------------------------------------------------------------
@@ -243,6 +291,7 @@ void testRoutingChangeWhileClosed() {
 int main() {
     testParse();
     testBindings();
+    testMidiMap();
     testPttStateMachine();
     testEngineGate();
     testRoutingChangeWhileClosed();
