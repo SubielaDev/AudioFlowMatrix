@@ -216,7 +216,11 @@ bool App::drawPttSettings() {
     } else if (!settings_.midiDevice.empty() && midiIn_.isOpen()) {
         ImGui::TextColored(ImVec4(0.3f, 0.85f, 0.4f, 1), "Listening to \"%s\".", midiIn_.deviceName().c_str());
     }
-    if (!midiError_.empty()) ImGui::TextColored(ImVec4(0.95f, 0.65f, 0.2f, 1), "%s", midiError_.c_str());
+    if (!midiError_.empty()) {
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.95f, 0.65f, 0.2f, 1));
+        ImGui::TextWrapped("%s", midiError_.c_str());
+        ImGui::PopStyleColor();
+    }
 
     // Mapping + Learn.
     const auto binding = midi::MidiBinding::parse(settings_.pttMidi);

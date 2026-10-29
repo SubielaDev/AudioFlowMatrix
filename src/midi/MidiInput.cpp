@@ -37,6 +37,14 @@ bool MidiInput::open(const Device& device, Handler handler, void* user, std::str
     HMIDIIN handle = nullptr;
     MMRESULT r = midiInOpen(&handle, device.id, reinterpret_cast<DWORD_PTR>(&MidiInput::callback),
                             reinterpret_cast<DWORD_PTR>(this), CALLBACK_FUNCTION);
+    if (r == MMSYSERR_ALLOCATED || r == MMSYSERR_NOMEM) {
+        // Windows 10 MIDI ports are single-client; USB class drivers report a port already
+        // opened by another program as "not enough memory" rather than "allocated".
+        error = "MIDI input '" + device.name + "' is in use by another program (only one program can open a "
+                "MIDI input at a time). Free it there, e.g. Traktor's Controller Manager, or pick another "
+                "port of the controller, then press Refresh. [" + mmError(r) + "]";
+        return false;
+    }
     if (r != MMSYSERR_NOERROR) {
         error = "Could not open MIDI input '" + device.name + "': " + mmError(r);
         return false;
