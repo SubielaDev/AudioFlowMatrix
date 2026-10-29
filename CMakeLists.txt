@@ -28,6 +28,21 @@ set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 
+# Baseline x86-64 for every target, the C/C++ runtime included. zig cc/c++ otherwise
+# compiles for the build machine's CPU (-mcpu=native), and the binaries then die with an
+# illegal instruction on older CPUs. SIMD kernels opt in per function or per file.
+if(CMAKE_CXX_COMPILER MATCHES "zig|zcxx")
+    set(_afm_cpu_default "-mcpu=x86_64")
+else()
+    set(_afm_cpu_default "")
+endif()
+set(AFM_TARGET_CPU_FLAGS "${_afm_cpu_default}" CACHE STRING "Compile and link flags that pin the target CPU")
+if(AFM_TARGET_CPU_FLAGS)
+    separate_arguments(_afm_cpu_flags NATIVE_COMMAND "${AFM_TARGET_CPU_FLAGS}")
+    add_compile_options("$<$<COMPILE_LANGUAGE:C,CXX>:${_afm_cpu_flags}>")
+    add_link_options(${_afm_cpu_flags})
+endif()
+
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(AfmCompilerOptions)
 
