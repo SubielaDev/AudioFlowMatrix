@@ -29,6 +29,7 @@ function(afm_configure_target target)
     else()
         target_compile_options(${target} ${_scope}
             -Wall -Wextra -Wpedantic -Wshadow
+            -g  # debug info goes to a separate .pdb, which crash reports use for symbols
             $<$<CONFIG:Release,RelWithDebInfo>:-O3>)
         if(MINGW AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND NOT _type STREQUAL "INTERFACE_LIBRARY")
             target_link_options(${target} PRIVATE -static-libgcc -static-libstdc++)

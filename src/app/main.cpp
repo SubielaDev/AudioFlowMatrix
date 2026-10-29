@@ -5,6 +5,7 @@
 
 #include "App.h"
 #include "Brand.h"
+#include "CrashReport.h"
 #include "resource.h"
 
 #include "afm/asio/BridgeProtocol.h"
@@ -93,12 +94,17 @@ int listDevices() {
 } // namespace
 
 int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR cmdLine, int) {
+    afm::app::installCrashHandler();
     CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);  // ASIO drivers expect an STA thread
 
     if (cmdLine != nullptr && std::wcsstr(cmdLine, L"--list") != nullptr) {
         const int rc = listDevices();
         CoUninitialize();
         return rc;
+    }
+    // Exercises the crash reporter: --crash-test on this thread, --crash-test-thread on another.
+    if (cmdLine != nullptr && std::wcsstr(cmdLine, L"--crash-test") != nullptr) {
+        afm::app::crashForTesting(std::wcsstr(cmdLine, L"--crash-test-thread") != nullptr);
     }
 
     // Single instance: the bridge shared memory and the master driver can only be owned once.
