@@ -3,12 +3,14 @@
 // in the engine (AudioEngine::setPtt).
 
 #include "App.h"
+#include "I18n.h"
 
 #include "imgui.h"
 
 #include <shellapi.h>
 
 #include <algorithm>
+#include <cstdio>
 
 namespace afm::app {
 
@@ -33,6 +35,33 @@ std::string targetLabel(const std::string& target) {
     const std::string out = midi::MidiMap::outputMuteTarget("");
     if (startsWith(target, in)) return "Mute: " + target.substr(in.size()) + " (input)";
     if (startsWith(target, out)) return "Mute: " + target.substr(out.size()) + " (output)";
+    return target;
+}
+
+// MidiBinding::describe() for the UI: "not mapped" is translated, note/CC names are not.
+std::string bindingText(const midi::MidiBinding& binding) {
+    return binding.type == midi::MidiBinding::Type::None ? tr("not mapped") : binding.describe();
+}
+
+// targetLabel() in the UI language with the channels' display names, for the MIDI tab.
+std::string targetLabelUi(const std::string& target, const std::map<std::string, std::string>& inputAliases,
+                          const std::map<std::string, std::string>& outputAliases) {
+    if (target == midi::MidiMap::pttTarget()) return tr("Push-to-talk");
+    const std::string in = midi::MidiMap::inputMuteTarget("");
+    const std::string out = midi::MidiMap::outputMuteTarget("");
+    const auto shown = [](const std::string& name, const std::map<std::string, std::string>& aliases) {
+        const auto it = aliases.find(name);
+        return it != aliases.end() ? it->second : name;
+    };
+    char text[256];
+    if (startsWith(target, in)) {
+        std::snprintf(text, sizeof(text), tr("Mute: %s (input)"), shown(target.substr(in.size()), inputAliases).c_str());
+        return text;
+    }
+    if (startsWith(target, out)) {
+        std::snprintf(text, sizeof(text), tr("Mute: %s (output)"), shown(target.substr(out.size()), outputAliases).c_str());
+        return text;
+    }
     return target;
 }
 
@@ -202,15 +231,15 @@ void App::drawPttButton() {
     ImGui::PushStyleColor(ImGuiCol_Button, color);
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(color.x + 0.08f, color.y + 0.08f, color.z + 0.08f, 1));
     ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(color.x + 0.15f, color.y + 0.15f, color.z + 0.15f, 1));
-    ImGui::Button(open ? "ON AIR###ptt" : "PTT  (mic muted on stream)###ptt", ImVec2(190 * s, 0));
+    ImGui::Button(open ? tr("ON AIR###ptt") : tr("PTT  (mic muted on stream)###ptt"), ImVec2(190 * s, 0));
     ImGui::PopStyleColor(3);
     if (ImGui::IsItemActivated()) ptt_->press(PushToTalk::Source::Mouse);
     if (ImGui::IsItemDeactivated()) ptt_->release(PushToTalk::Source::Mouse);
 
     if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) {
-        ImGui::SetTooltip("Push-to-talk, mic -> stream (%s)\nMIDI: %s (map it in the MIDI tab)",
-                          settings_.pttToggle ? "click to toggle" : "hold to talk",
-                          settings_.midiMap.bindingFor(midi::MidiMap::pttTarget()).describe().c_str());
+        ImGui::SetTooltip(tr("Push-to-talk, mic -> stream (%s)\nMIDI: %s (map it in the MIDI tab)"),
+                          settings_.pttToggle ? tr("click to toggle") : tr("hold to talk"),
+                          bindingText(settings_.midiMap.bindingFor(midi::MidiMap::pttTarget())).c_str());
     }
 }
 
@@ -218,25 +247,27 @@ void App::drawPttButton() {
 bool App::drawPttSettings() {
     const float s = ImGui::GetFontSize() / 16.0f;
     bool changed = false;
-    ImGui::SeparatorText("Push-to-talk: mic -> stream (optional)");
+    ImGui::SeparatorText(tr("Push-to-talk: mic -> stream (optional)"));
 
-    bool pttChanged = ImGui::Checkbox("Enable push-to-talk", &settings_.pttEnabled);
+    bool pttChanged = ImGui::Checkbox(tr("Enable push-to-talk"), &settings_.pttEnabled);
     ImGui::SameLine(0, 24 * s);
     int mode = settings_.pttToggle ? 1 : 0;
-    pttChanged |= ImGui::RadioButton("Hold to talk", &mode, 0);
+    pttChanged |= ImGui::RadioButton(tr("Hold to talk"), &mode, 0);
     ImGui::SameLine();
-    pttChanged |= ImGui::RadioButton("Toggle", &mode, 1);
+    pttChanged |= ImGui::RadioButton(tr("Toggle"), &mode, 1);
     if (pttChanged) {
         settings_.pttToggle = mode == 1;
         applyPttSettings();
         changed = true;
     }
-    ImGui::TextDisabled("While enabled, the mic only reaches the Stream output when PTT is open. "
-                        "The mic to your interface and everything else is unaffected.");
-    ImGui::TextDisabled("MIDI: %s. Map it, and channel mutes, in the MIDI tab.",
-                        settings_.midiMap.bindingFor(midi::MidiMap::pttTarget()).describe().c_str());
+    ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
+    ImGui::TextWrapped("%s", tr("While enabled, the mic only reaches the Stream output when PTT is open. The mic to your "
+                                "interface and everything else is unaffected."));
+    ImGui::TextWrapped(tr("MIDI: %s. Map it, and channel mutes, in the MIDI tab."),
+                       bindingText(settings_.midiMap.bindingFor(midi::MidiMap::pttTarget())).c_str());
+    ImGui::PopStyleColor();
     if (settings_.pttEnabled && running_ && (mic_ == nullptr || stream_ == nullptr)) {
-        ImGui::TextColored(ImVec4(0.95f, 0.65f, 0.2f, 1), "Enable the USB mic and the stream output for PTT to act.");
+        ImGui::TextColored(ImVec4(0.95f, 0.65f, 0.2f, 1), "%s", tr("Enable the USB mic and the stream output for PTT to act."));
     }
     return changed;
 }
@@ -246,10 +277,10 @@ void App::drawMidi() {
     const float s = ImGui::GetFontSize() / 16.0f;
     bool changed = false;
 
-    ImGui::SeparatorText("MIDI input");
+    ImGui::SeparatorText(tr("MIDI input"));
     ImGui::SetNextItemWidth(320 * s);
-    if (ImGui::BeginCombo("MIDI input", settings_.midiDevice.empty() ? "(none)" : settings_.midiDevice.c_str())) {
-        if (ImGui::Selectable("(none)", settings_.midiDevice.empty())) {
+    if (ImGui::BeginCombo(tr("MIDI input##combo"), settings_.midiDevice.empty() ? tr("(none)") : settings_.midiDevice.c_str())) {
+        if (ImGui::Selectable(tr("(none)"), settings_.midiDevice.empty())) {
             settings_.midiDevice.clear();
             openMidi();
             changed = true;
@@ -266,18 +297,18 @@ void App::drawMidi() {
     // Re-scans the ports and reopens the selected one: picks up a controller plugged in (or
     // unplugged and replugged) while the app was running.
     ImGui::SameLine();
-    if (ImGui::Button("Refresh##midi")) {
+    if (ImGui::Button(tr("Refresh##midi"))) {
         log_.write("MIDI: refresh requested");
         listMidiDevices();
         openMidi();
     }
     if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) {
-        ImGui::SetTooltip("Look for MIDI inputs again and reconnect the selected one.");
+        ImGui::SetTooltip("%s", tr("Look for MIDI inputs again and reconnect the selected one."));
     }
     if (midiDevices_.empty()) {
-        ImGui::TextDisabled("No MIDI inputs found: connect one and press Refresh.");
+        ImGui::TextDisabled("%s", tr("No MIDI inputs found: connect one and press Refresh."));
     } else if (!settings_.midiDevice.empty() && midiIn_.isOpen()) {
-        ImGui::TextColored(ImVec4(0.3f, 0.85f, 0.4f, 1), "Listening to \"%s\".", midiIn_.deviceName().c_str());
+        ImGui::TextColored(ImVec4(0.3f, 0.85f, 0.4f, 1), tr("Listening to \"%s\"."), midiIn_.deviceName().c_str());
     }
     if (!midiError_.empty()) {
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.95f, 0.65f, 0.2f, 1));
@@ -287,15 +318,15 @@ void App::drawMidi() {
 
     // Every mappable control. Channels come from the current layout; mappings for channels
     // that are not active right now are listed too, so they can still be cleared.
-    ImGui::SeparatorText("Mappable controls");
+    ImGui::SeparatorText(tr("Mappable controls"));
     const bool learning = midiLearning_.load(std::memory_order_relaxed);
     if (learning) {
-        ImGui::TextColored(ImVec4(0.6f, 0.45f, 1.0f, 1), "Press the pad, key or button for \"%s\"...",
-                           targetLabel(midiLearnTarget_).c_str());
+        ImGui::TextColored(ImVec4(0.6f, 0.45f, 1.0f, 1), tr("Press the pad, key or button for \"%s\"..."),
+                           targetLabelUi(midiLearnTarget_, settings_.inputAliases, settings_.outputAliases).c_str());
     } else if (!midiIn_.isOpen()) {
-        ImGui::TextDisabled("Pick a MIDI input above to use MIDI Learn.");
+        ImGui::TextDisabled("%s", tr("Pick a MIDI input above to use MIDI Learn."));
     } else {
-        ImGui::TextDisabled("Press Learn on a control, then the pad, key or button that should drive it.");
+        ImGui::TextDisabled("%s", tr("Press Learn on a control, then the pad, key or button that should drive it."));
     }
 
     struct Row {
@@ -304,7 +335,7 @@ void App::drawMidi() {
         bool active;
     };
     std::vector<Row> rows;
-    rows.push_back({midi::MidiMap::pttTarget(), "Push-to-talk (mic -> stream)", true});
+    rows.push_back({midi::MidiMap::pttTarget(), tr("Push-to-talk (mic -> stream)"), true});
     for (std::uint32_t i = 0; i < routing_.numInputs(); ++i) {
         rows.push_back({midi::MidiMap::inputMuteTarget(routing_.inputName(i)), "", true});
     }
@@ -316,14 +347,14 @@ void App::drawMidi() {
         if (!listed) rows.push_back({entry.target, "", false});
     }
     for (Row& r : rows) {
-        if (r.label.empty()) r.label = targetLabel(r.target);
+        if (r.label.empty()) r.label = targetLabelUi(r.target, settings_.inputAliases, settings_.outputAliases);
     }
 
     static ImGuiTextFilter filter;
-    filter.Draw("Filter##midi", 260 * s);
+    filter.Draw(tr("Filter##midi"), 260 * s);
     if (routing_.numInputs() == 0) {
         ImGui::SameLine();
-        ImGui::TextDisabled("Start audio to list the channel mutes.");
+        ImGui::TextDisabled("%s", tr("Start audio to list the channel mutes."));
     }
 
     const ImGuiTableFlags flags = ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_ScrollY |
@@ -331,8 +362,8 @@ void App::drawMidi() {
     const float tableHeight = std::max(160.0f * s, ImGui::GetContentRegionAvail().y - ImGui::GetTextLineHeightWithSpacing() * 10.5f);
     if (ImGui::BeginTable("midi-map", 3, flags, ImVec2(0, tableHeight))) {
         ImGui::TableSetupScrollFreeze(0, 1);
-        ImGui::TableSetupColumn("Control", ImGuiTableColumnFlags_WidthStretch, 3.0f);
-        ImGui::TableSetupColumn("MIDI control", ImGuiTableColumnFlags_WidthStretch, 2.0f);
+        ImGui::TableSetupColumn(tr("Control"), ImGuiTableColumnFlags_WidthStretch, 3.0f);
+        ImGui::TableSetupColumn(tr("MIDI control"), ImGuiTableColumnFlags_WidthStretch, 2.0f);
         ImGui::TableSetupColumn("##actions", ImGuiTableColumnFlags_WidthFixed, 170 * s);
         ImGui::TableHeadersRow();
         for (const Row& r : rows) {
@@ -346,25 +377,25 @@ void App::drawMidi() {
             ImGui::TableSetColumnIndex(0);
             ImGui::AlignTextToFramePadding();
             if (r.active) ImGui::TextUnformatted(r.label.c_str());
-            else ImGui::TextDisabled("%s  (not active)", r.label.c_str());
+            else ImGui::TextDisabled(tr("%s  (not active)"), r.label.c_str());
 
             ImGui::TableSetColumnIndex(1);
             ImGui::AlignTextToFramePadding();
-            if (learningThis) ImGui::TextColored(ImVec4(0.7f, 0.6f, 1.0f, 1), "waiting...");
+            if (learningThis) ImGui::TextColored(ImVec4(0.7f, 0.6f, 1.0f, 1), "%s", tr("waiting..."));
             else if (binding.type == midi::MidiBinding::Type::None) ImGui::TextDisabled("-");
             else ImGui::TextUnformatted(binding.describe().c_str());
 
             ImGui::TableSetColumnIndex(2);
             if (learningThis) {
-                if (ImGui::SmallButton("Cancel")) cancelMidiLearn();
+                if (ImGui::SmallButton(tr("Cancel"))) cancelMidiLearn();
             } else {
                 ImGui::BeginDisabled(!midiIn_.isOpen());
-                if (ImGui::SmallButton("Learn")) startMidiLearn(r.target);
+                if (ImGui::SmallButton(tr("Learn"))) startMidiLearn(r.target);
                 ImGui::EndDisabled();
             }
             ImGui::SameLine();
             ImGui::BeginDisabled(binding.type == midi::MidiBinding::Type::None);
-            if (ImGui::SmallButton("Clear")) clearMidiMapping(r.target);
+            if (ImGui::SmallButton(tr("Clear"))) clearMidiMapping(r.target);
             ImGui::EndDisabled();
             ImGui::PopID();
         }
@@ -373,15 +404,15 @@ void App::drawMidi() {
     if (learning && ImGui::IsKeyPressed(ImGuiKey_Escape)) cancelMidiLearn();
 
     // Monitor: proves messages arrive even when nothing is mapped.
-    ImGui::Text("Last MIDI messages%s:", midiIn_.isOpen() ? "" : " (no input open)");
+    ImGui::TextUnformatted(midiIn_.isOpen() ? tr("Last MIDI messages:") : tr("Last MIDI messages (no input open):"));
     ImGui::BeginChild("midi-monitor", ImVec2(0, ImGui::GetTextLineHeightWithSpacing() * 6.5f), ImGuiChildFlags_Borders);
-    if (midiMonitor_.empty()) ImGui::TextDisabled("Nothing received yet.");
+    if (midiMonitor_.empty()) ImGui::TextDisabled("%s", tr("Nothing received yet."));
     for (const auto& line : midiMonitor_) ImGui::TextUnformatted(line.c_str());
     ImGui::EndChild();
 
-    ImGui::TextDisabled("Diagnostics log (send it if MIDI misbehaves): %%APPDATA%%\\AudioFlowMatrix\\logs");
+    ImGui::TextDisabled(tr("Diagnostics log (send it if MIDI misbehaves): %s"), "%APPDATA%\\AudioFlowMatrix\\logs");
     ImGui::SameLine();
-    if (ImGui::SmallButton("Open log folder") && !log_.directory().empty()) {
+    if (ImGui::SmallButton(tr("Open log folder")) && !log_.directory().empty()) {
         ShellExecuteW(nullptr, L"explore", log_.directory().c_str(), nullptr, nullptr, SW_SHOWNORMAL);
     }
 

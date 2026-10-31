@@ -54,13 +54,30 @@ flowchart LR
 
 ## Funciones
 
-- **Matriz de ruteo** NxM con ganancia, mute y paneo por cruce, y faders con medidores por canal.
-- **Driver ASIO virtual** para Traktor y DAWs, sincronizado con la tarjeta maestra.
+- **Matriz de ruteo** NxM con volumen (0 a 100), mute y paneo por cruce, volumen de cada entrada y salida en la
+  propia matriz, nombres personalizados para los canales y faders con medidores por canal.
+- **Mezclador** con faders y medidores por canal; la ganancia en dB se puede escribir con el teclado
+  (doble clic en el número) y la tira del micro llega a +24 dB.
+- **Driver ASIO virtual** para Traktor y DAWs, sincronizado con la tarjeta maestra, con un búfer de
+  seguridad que evita clics si Traktor entrega un bloque tarde (crece solo si hace falta). La app solo pide
+  actualizar el driver cuando cambia de verdad, no con cada versión.
 - **Micrófono USB** por WASAPI (exclusivo o compartido) con compensación de deriva de reloj.
 - **Denoise** con RNNoise y **puerta de ruido** (umbral de −60 a −20 dB, hold y release suaves).
+- **Loopback del sonido de Windows**: lo que suena en un dispositivo de reproducción (juego, Discord,
+  navegador) entra en la matriz como un canal más.
 - **Push-to-talk** opcional del micro hacia la salida Stream, en modo mantener o conmutar.
 - **Control MIDI**: pestaña MIDI con MIDI Learn para el PTT y el MUTE de cada canal.
 - **Diagnóstico**: log de MIDI/PTT/audio e informes de crash con la función y línea exactas.
+- **Aviso de nuevas versiones**: una vez al día pregunta a GitHub cuál es la última release y, si hay una
+  más nueva, muestra un aviso con un botón para abrir su página. No descarga ni instala nada por su cuenta;
+  se desactiva con *Check for updates*, abajo a la derecha (junto a la versión y los enlaces a GitHub y
+  Ko-fi) o en la pestaña Settings, donde también se puede comprobar al momento.
+- **Interfaz ligera**: va a 60 fps (unos 3 % de un núcleo de CPU) y baja sola a 15 fps cuando está en segundo
+  plano. En Settings se puede elegir 15, 30, 60 fps o la frecuencia del monitor.
+- **Minimizar a la bandeja** (opcional, en Settings): al minimizar queda como icono junto al reloj, con el
+  audio y el MIDI funcionando; clic para abrirlo, clic derecho para salir.
+- **Varios idiomas**: español, inglés, portugués, francés, alemán, italiano y ruso, a elegir en la pestaña
+  Settings. La primera vez usa el idioma de Windows.
 
 ## Uso
 
@@ -79,8 +96,28 @@ flowchart LR
      virtual como VB-CABLE: envía el audio a *CABLE Input* y elige *CABLE Output* como micro allí).
 3. Pulsa **Start**. En Traktor: *Preferences > Audio Setup > AudioFlow Matrix ASIO*, a la misma
    frecuencia que la tarjeta.
-4. Pestaña **Matrix**: clic en una celda para rutear, clic derecho para ganancia / mute / paneo.
+4. Pestaña **Matrix**: clic en una celda para rutear, clic derecho para volumen / mute / paneo.
    Pestaña **Mixer**: faders de entrada y de bus de salida con medidores de pico.
+
+### Matriz y mezclador
+
+- **Volúmenes de 0 a 100** en la matriz: 100 es el volumen original (0 dB) y 0 es silencio. Cada fila
+  lleva el volumen de su entrada y la última fila el de cada salida; se arrastran o se escriben con
+  doble clic.
+- **Clic derecho en un nombre** (en la Matriz o en el Mezclador) para renombrar el canal. Solo cambia
+  el nombre visible: rutas y mapeos MIDI siguen funcionando. *Settings > Restore all channel names*
+  vuelve a los originales.
+- Grupos de dispositivos en tablero de ajedrez y la fila y columna bajo el ratón iluminadas.
+- En el **Mezclador**, el número bajo cada fader es la ganancia en dB: arrástralo o haz doble clic y
+  escríbela (-60 = apagado; hasta +12, o +24 en el micro). Doble clic en el fader lo vuelve a 0 dB.
+
+### Traktor: búfer de seguridad
+
+Con Traktor conectado, **Devices** muestra su PID, el **búfer de seguridad** (bloques y ms) y los
+**bloques tarde** de los últimos 10 s y del total. Un bloque tarde es un pequeño hueco (un clic) en el
+audio de Traktor; cuando ocurre, el búfer crece un bloque (hasta 4) para que no se repita, y queda
+anotado en el log. Si Traktor deja de enviar audio sin desconectarse, la app lo avisa: reinicia su
+audio en *Preferences > Audio Setup*.
 
 ### Micrófono: Denoise y Gate
 
@@ -129,7 +166,8 @@ Para probarlo paso a paso, consulta la [guía de prueba](docs/guia-de-prueba.md)
 | Ruta | Latencia que añade AudioFlow Matrix |
 |---|---|
 | Entrada ASIO → matriz → salida ASIO | 0 (mismo callback) |
-| Traktor ↔ matriz | 1 bloque (p. ej. 64 muestras = 1,33 ms a 48 kHz) |
+| Matriz → Traktor (entradas de Traktor) | 1 bloque (p. ej. 256 muestras = 5,33 ms a 48 kHz) |
+| Traktor → matriz (salidas de Traktor) | 2 bloques: 1 de puente + 1 de búfer de seguridad (más si el búfer crece) |
 | Micro USB → matriz | Periodo WASAPI + ~1,5 bloques de margen en la cola |
 | Micro USB con Denoise disponible (a 48 kHz) | + 30 ms (1440 muestras: 480 de reagrupado + 960 de RNNoise) |
 
@@ -147,8 +185,9 @@ src/midi      decodificación MIDI, asignaciones y MidiMap (portables) + entrada
 src/platform  utilidades Win32: puntero COM, MMCSS, UTF-8
 src/asio      ABI de ASIO, host del driver maestro, DLL del driver virtual + puente de memoria compartida
 src/wasapi    endpoints WASAPI de captura y reproducción (exclusivo con fallback a compartido)
-src/app       interfaz Dear ImGui (Win32 + OpenGL 3), PTT/MIDI, log e informes de crash
-tests         núcleo y motor, voz (RNNoise/puerta), PTT/MIDI
+src/app       interfaz Dear ImGui (Win32 + OpenGL 3), ajustes, idiomas, bandeja, PTT/MIDI, log e informes de crash
+tests         núcleo y motor, voz (RNNoise/puerta), PTT/MIDI, puente ASIO, avisos de versión, idiomas,
+              identidad del driver
 tools         brand_assets.py: genera el icono y el logo embebido desde docs/assets
 third_party   Dear ImGui 1.91.8 (MIT), RNNoise 0.2 (BSD-3-Clause)
 ```
@@ -179,4 +218,5 @@ aplicación de ventana (subsistema GUI), así que no abre ninguna consola.
 ## Licencia
 
 MIT, ver [LICENSE](LICENSE). Dear ImGui tiene licencia MIT de Omar Cornut. RNNoise tiene
-licencia BSD-3-Clause (ver `third_party/rnnoise/COPYING`).
+licencia BSD-3-Clause (ver `third_party/rnnoise/COPYING`). El icono de GitHub de la interfaz es el
+"mark-github" de [Octicons](https://github.com/primer/octicons) (MIT, GitHub Inc.).

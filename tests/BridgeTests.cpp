@@ -3,6 +3,7 @@
 // Exit code = number of failures.
 
 #include "afm/asio/BridgeProtocol.h"
+#include "afm/asio/ClientReceiver.h"
 
 #include <windows.h>
 
@@ -135,9 +136,127 @@ void testHeaderValidation() {
     AFM_CHECK(!isValid(m.base));
 }
 
+// A simulated client (Traktor) answering engine ticks, and the engine pulling through a
+// ClientReceiver. Client block n carries the value n, so gaps and dropped blocks show up as
+// breaks in the sequence the engine receives.
+struct ClientSim {
+    static constexpr std::uint32_t kFrames = 128;
+    GuardedMapping m;
+    View v = construct(m.base);
+    ClientReceiver receiver;
+    float next = 1.0f;         // value of the client's next block
+    float expected = 1.0f;     // value the engine should receive next
+    int pending = 0;           // ticks the client has not answered yet
+    int silentPulls = 0;
+    bool sequenceOk = true;
+
+    ClientSim() { v.header->clientState.store(kClientRunning); }
+
+    void clientAnswers(int blocks) {
+        for (int i = 0; i < blocks; ++i) {
+            Block b(kFrames, next);
+            next += 1.0f;
+            v.fromClient.write(ConstAudioBlock{b.ptrs.data(), kChannels, kFrames});
+            v.header->clientBlocks.store(v.header->clientBlocks.load() + 1);
+        }
+    }
+
+    // One engine block: pull, then tick the client. `answer` false: the client misses this
+    // tick's deadline (it answers late, together with a later tick).
+    void tick(bool answer = true) {
+        Block out(kFrames, -1.0f);
+        receiver.pull(v.fromClient, *v.header, AudioBlock{out.ptrs.data(), kChannels, kFrames});
+        const float got = out.lanes[0].front();
+        if (got == 0.0f) {
+            ++silentPulls;
+        } else {
+            sequenceOk &= got == expected && out.lanes[0].back() == expected;
+            expected = got + 1.0f;
+        }
+        ++pending;
+        if (answer) {
+            clientAnswers(pending);
+            pending = 0;
+        }
+    }
+};
+
+void testReceiverOnTime() {
+    ClientSim c;
+    for (int i = 0; i < 1000; ++i) c.tick();
+    AFM_CHECK(c.sequenceOk);
+    AFM_CHECK(c.silentPulls == static_cast<int>(ClientReceiver::kInitialSafety) + 1);  // priming only
+    AFM_CHECK(c.receiver.lateBlocks() == 0);
+    AFM_CHECK(c.receiver.safetyBlocks() == ClientReceiver::kInitialSafety);
+}
+
+void testReceiverCoversALateBlock() {
+    ClientSim c;
+    for (int i = 0; i < 100; ++i) c.tick();
+    for (int k = 0; k < 20; ++k) {  // late by one tick, now and then: no gap, no growth
+        c.tick(false);
+        for (int i = 0; i < 30; ++i) c.tick();
+    }
+    AFM_CHECK(c.sequenceOk);
+    AFM_CHECK(c.silentPulls == static_cast<int>(ClientReceiver::kInitialSafety) + 1);
+    AFM_CHECK(c.receiver.lateBlocks() == 0);
+    AFM_CHECK(c.receiver.safetyBlocks() == ClientReceiver::kInitialSafety);
+}
+
+void testReceiverGrowsAfterAGap() {
+    ClientSim c;
+    for (int i = 0; i < 100; ++i) c.tick();
+    c.tick(false);  // two ticks late: more than the reserve covers
+    c.tick(false);
+    for (int i = 0; i < 100; ++i) c.tick();
+    AFM_CHECK(c.receiver.lateBlocks() == 1);
+    AFM_CHECK(c.receiver.safetyBlocks() == ClientReceiver::kInitialSafety + 1);
+    AFM_CHECK(c.sequenceOk);  // a gap of silence, but no block lost or reordered
+    // With the bigger reserve the same two-tick delay no longer makes a gap.
+    const int silentBefore = c.silentPulls;
+    c.tick(false);
+    c.tick(false);
+    for (int i = 0; i < 100; ++i) c.tick();
+    AFM_CHECK(c.receiver.lateBlocks() == 1);
+    AFM_CHECK(c.silentPulls == silentBefore);
+    AFM_CHECK(c.sequenceOk);
+}
+
+void testReceiverStalledClient() {
+    ClientSim c;
+    for (int i = 0; i < 100; ++i) c.tick();
+    for (std::uint32_t i = 0; i < ClientReceiver::kStallBlocks + 50; ++i) c.tick(false);  // never answers again
+    AFM_CHECK(c.receiver.stalled());
+    AFM_CHECK(c.receiver.lateBlocks() <= 1);  // the first missing block, not one per tick
+    // It resumes: no longer stalled, audio flows again.
+    c.pending = 0;
+    for (int i = 0; i < 100; ++i) c.tick();
+    AFM_CHECK(!c.receiver.stalled());
+    Block out(ClientSim::kFrames, -1.0f);
+    c.receiver.pull(c.v.fromClient, *c.v.header, AudioBlock{out.ptrs.data(), kChannels, ClientSim::kFrames});
+    AFM_CHECK(out.lanes[0].front() != 0.0f);
+}
+
+void testReceiverReset() {
+    ClientSim c;
+    for (int i = 0; i < 50; ++i) c.tick();
+    c.tick(false);
+    c.tick(false);
+    for (int i = 0; i < 50; ++i) c.tick();
+    AFM_CHECK(c.receiver.safetyBlocks() > ClientReceiver::kInitialSafety);
+    c.receiver.requestReset();
+    c.tick();
+    AFM_CHECK(c.receiver.safetyBlocks() == ClientReceiver::kInitialSafety);
+}
+
 } // namespace
 
 int main() {
+    testReceiverOnTime();
+    testReceiverCoversALateBlock();
+    testReceiverGrowsAfterAGap();
+    testReceiverStalledClient();
+    testReceiverReset();
     testRoundTripAndWrap();
     testHostileCursors();
     testHeaderValidation();

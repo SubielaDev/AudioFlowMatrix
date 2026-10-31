@@ -1,5 +1,7 @@
 #include "Brand.h"
 
+#include "imgui_internal.h"  // ShadeVertsLinearColorGradientKeepAlpha
+
 #include <windows.h>
 
 #include <GL/gl.h>
@@ -22,8 +24,8 @@ void applyTheme(float scale) {
     ImGuiStyle& style = ImGui::GetStyle();
     ImGui::StyleColorsDark();
     style.WindowRounding = 0.0f;
-    style.FrameRounding = 5.0f;
-    style.GrabRounding = 4.0f;
+    style.FrameRounding = 7.0f;  // buttons, fields and matrix cells
+    style.GrabRounding = 6.0f;
     style.TabRounding = 5.0f;
     style.ChildRounding = 6.0f;
     style.PopupRounding = 6.0f;
@@ -84,14 +86,26 @@ void releaseTextures() {
     g_wordmark = 0;
 }
 
+float wordmarkWidth(float height) {
+    return height * static_cast<float>(kWordmarkWidth) / static_cast<float>(kWordmarkHeight);
+}
+
 void wordmark(float height) {
     if (g_wordmark == 0) return;
     const float width = height * static_cast<float>(kWordmarkWidth) / static_cast<float>(kWordmarkHeight);
     ImGui::Image(static_cast<ImTextureID>(static_cast<std::uintptr_t>(g_wordmark)), ImVec2(width, height));
 }
 
-void gradientRect(ImDrawList* dl, ImVec2 p0, ImVec2 p1) {
-    dl->AddRectFilledMultiColor(p0, p1, kCyan, kBlue, kViolet, kBlue);
+// Cyan in the top-left corner to violet in the bottom-right, through blue; rounded corners
+// need a plain filled shape recoloured along the diagonal (AddRectFilledMultiColor is square).
+void gradientRect(ImDrawList* dl, ImVec2 p0, ImVec2 p1, float rounding) {
+    if (rounding <= 0.0f) {
+        dl->AddRectFilledMultiColor(p0, p1, kCyan, kBlue, kViolet, kBlue);
+        return;
+    }
+    const int first = dl->VtxBuffer.Size;
+    dl->AddRectFilled(p0, p1, IM_COL32_WHITE, rounding);
+    ImGui::ShadeVertsLinearColorGradientKeepAlpha(dl, first, dl->VtxBuffer.Size, p0, p1, kCyan, kViolet);
 }
 
 } // namespace afm::app::brand

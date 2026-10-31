@@ -13,6 +13,7 @@ namespace afm {
 
 inline constexpr float kFaderMinDb = -60.0f;  // at or below: -inf
 inline constexpr float kFaderMaxDb = 12.0f;
+inline constexpr float kMicFaderMaxDb = 24.0f;  // mic input strips: USB mics are often quiet
 
 struct ChannelStrip {
     float gainDb = 0.0f;

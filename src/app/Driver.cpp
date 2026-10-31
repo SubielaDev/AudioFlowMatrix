@@ -1,5 +1,6 @@
 #include "Driver.h"
 
+#include "PeIdentity.h"
 #include "resource.h"
 
 #include <shellapi.h>
@@ -35,9 +36,9 @@ Bytes embedded() {
     return data != nullptr ? Bytes{data, SizeofResource(nullptr, res)} : Bytes{};
 }
 
-std::uint64_t fnv1a(Bytes b) {
+std::uint64_t fnv1a(const std::vector<std::uint8_t>& bytes) {
     std::uint64_t h = 1469598103934665603ull;
-    for (std::size_t i = 0; i < b.size; ++i) h = (h ^ b.data[i]) * 1099511628211ull;
+    for (std::uint8_t byte : bytes) h = (h ^ byte) * 1099511628211ull;
     return h;
 }
 
@@ -54,21 +55,33 @@ std::wstring driverDirectory() {
     return pf.empty() ? std::wstring{} : pf + L"\\AudioFlow Matrix\\driver";
 }
 
-// Whole-file comparison with the embedded DLL.
-bool fileEquals(const std::wstring& path, Bytes b) {
+// The file's bytes if it has exactly `size` of them (the embedded DLL's size), else empty.
+std::vector<std::uint8_t> readSameSize(const std::wstring& path, std::size_t size) {
+    std::vector<std::uint8_t> buf;
     HANDLE f = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
                            FILE_ATTRIBUTE_NORMAL, nullptr);
-    if (f == INVALID_HANDLE_VALUE) return false;
-    LARGE_INTEGER size{};
-    bool same = GetFileSizeEx(f, &size) && static_cast<std::uint64_t>(size.QuadPart) == b.size;
-    if (same) {
-        std::vector<std::uint8_t> buf(b.size);
+    if (f == INVALID_HANDLE_VALUE) return buf;
+    LARGE_INTEGER fileSize{};
+    if (GetFileSizeEx(f, &fileSize) && static_cast<std::uint64_t>(fileSize.QuadPart) == size && size > 0) {
+        buf.resize(size);
         DWORD read = 0;
-        same = ReadFile(f, buf.data(), static_cast<DWORD>(b.size), &read, nullptr) && read == b.size &&
-               std::memcmp(buf.data(), b.data, b.size) == 0;
+        if (!ReadFile(f, buf.data(), static_cast<DWORD>(size), &read, nullptr) || read != size) buf.clear();
     }
     CloseHandle(f);
-    return same;
+    return buf;
+}
+
+// Byte-for-byte comparison with the embedded DLL (verifies a copy just written).
+bool fileEquals(const std::wstring& path, Bytes b) {
+    const std::vector<std::uint8_t> file = readSameSize(path, b.size);
+    return !file.empty() && std::memcmp(file.data(), b.data, b.size) == 0;
+}
+
+// Same driver as the embedded DLL, ignoring build timestamps and PDB identity (PeIdentity.h):
+// a rebuild of unchanged driver code does not need reinstalling.
+bool fileMatches(const std::wstring& path, Bytes b) {
+    const std::vector<std::uint8_t> file = readSameSize(path, b.size);
+    return !file.empty() && pe::sameImage(file.data(), file.size(), b.data, b.size);
 }
 
 bool writeFile(const std::wstring& path, Bytes b) {
@@ -118,7 +131,10 @@ std::wstring installPath() {
     const std::wstring dir = driverDirectory();
     if (dir.empty()) return {};
     wchar_t name[64];
-    std::swprintf(name, 64, L"\\AudioFlowMatrixASIO-%016llx.dll", static_cast<unsigned long long>(fnv1a(embedded())));
+    // Named after the normalized content, so rebuilds of the same driver share one file.
+    const Bytes dll = embedded();
+    std::swprintf(name, 64, L"\\AudioFlowMatrixASIO-%016llx.dll",
+                  static_cast<unsigned long long>(fnv1a(pe::normalizePe(dll.data, dll.size))));
     return dir + name;
 }
 
@@ -140,7 +156,7 @@ Status status() {
     }
     RegCloseKey(key);
     const std::wstring registered = registeredPath();
-    return !registered.empty() && fileEquals(registered, embedded()) ? Status::Registered : Status::RegisteredOther;
+    return !registered.empty() && fileMatches(registered, embedded()) ? Status::Registered : Status::RegisteredOther;
 }
 
 bool runElevated(bool install, HWND owner, std::string& error) {
@@ -184,8 +200,11 @@ int installElevated() {
     CreateDirectoryW(dir.c_str(), nullptr);
 
     const std::wstring target = installPath();
-    if (!fileEquals(target, dll) && !writeFile(target, dll)) return kWriteFailed;
-    if (!fileEquals(target, dll)) return kVerifyFailed;
+    // An equivalent build already in place is kept; a new copy must match byte for byte.
+    if (!fileMatches(target, dll)) {
+        if (!writeFile(target, dll)) return kWriteFailed;
+        if (!fileEquals(target, dll)) return kVerifyFailed;
+    }
 
     // Register by calling the DLL's own entry point (no regsvr32), with its imports resolved
     // from System32 and its own admin-only folder only.

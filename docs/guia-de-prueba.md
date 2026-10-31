@@ -7,6 +7,10 @@ micro USB y la salida para Discord/OBS en una sola matriz de ruteo de baja laten
 supresor de ruido para el micro, push-to-talk y control por MIDI. Esta guía explica cómo
 instalarlo, qué probar y qué contarnos.
 
+La interfaz sale en el idioma de Windows. Esta guía cita los botones con su nombre en inglés: si
+prefieres seguirla al pie de la letra, cambia el idioma en la pestaña **Settings** (en español,
+**Ajustes**) > **Language**.
+
 ## Cómo fluye el audio
 
 ```
@@ -71,7 +75,13 @@ tarjeta, y entradas 1-8 de la tarjeta → Traktor. El puente añade un bloque de
 
 - **Clic** en una celda: rutea o desrutea. Las rutas activas se ven con el degradado de la marca,
   rojo = en mute, gris = sin ruta.
-- **Clic derecho**: ganancia (-60 a +12 dB), mute y paneo (solo en salidas estéreo).
+- **Clic derecho**: volumen, mute y paneo (solo en salidas estéreo).
+- **Volúmenes de 0 a 100**: 100 es el volumen original (0 dB) y 0 es silencio. Cada fila tiene el volumen de su
+  entrada y la última fila el de cada salida. Se arrastran, o doble clic para escribir el número.
+- **Clic derecho en un nombre** (o en el volumen de una salida) para renombrarlo. Solo cambia el nombre que ves:
+  las rutas y los mapeos MIDI siguen funcionando, y se puede volver al nombre original.
+- Los grupos de dispositivos se alternan como un tablero de ajedrez y la fila y la columna bajo el ratón se
+  iluminan, para no perderse en matrices grandes.
 
 **Pestaña Mixer**
 
@@ -87,7 +97,9 @@ Ambos se activan en Devices y se aplican con **Apply and restart audio**.
 **Micrófono USB**
 
 1. Marca **Enable** y elige el micro en **Capture device**.
-2. Deja **Exclusive mode** marcado. Si otra app usa el micro, pasa solo a modo compartido.
+2. Deja **Exclusive mode** desmarcado (modo compartido, el de por defecto) para que juegos, Discord o el
+   navegador también puedan usar el micro. Márcalo solo si ninguna otra app lo necesita: baja un poco la
+   latencia, pero Windows le da el micro solo a AudioFlow Matrix.
 3. Es normal ver una deriva entre -300 y +300 ppm: se compensa sola. Debe decir "locked".
 
 **Denoise y Gate** (debajo del micro; se aplican al momento)
@@ -99,6 +111,18 @@ Ambos se activan en Devices y se aplican con **Apply and restart audio**.
   que hablar fuerte. Empieza en -45 dB.
 - Debajo se ve si la puerta está abierta, **Voice %** (lo seguro que está de que es voz) y la
   latencia añadida (30 ms).
+
+**Loopback del sonido de Windows**
+
+Mete en la matriz lo que suena en un dispositivo de reproducción de Windows (juego, Discord, navegador).
+
+1. En **Windows sound loopback**, marca **Enable** y elige el dispositivo en **Playback device**
+   (normalmente el que tienes como predeterminado en Windows).
+2. Pulsa **Apply and restart audio**: aparecen las entradas **Loopback L/R** en la matriz y el mixer.
+3. Rutéalas a donde quieras, por ejemplo a la salida Stream para que Discord/OBS oigan el juego.
+
+Las apps siguen sonando en ese dispositivo como siempre. No elijas el mismo dispositivo que la salida
+Stream si vas a rutear Loopback a Stream: el sonido volvería a entrar en sí mismo (sale un aviso).
 
 **Salida para Discord/OBS**
 
@@ -136,6 +160,17 @@ En Windows 10 cada entrada MIDI solo la puede abrir un programa a la vez. Si Tra
 el controlador sale un aviso naranja: libéralo en Traktor (*Controller Manager*) o usa otro
 puerto del mismo controlador.
 
+## Aviso de nuevas versiones
+
+Una vez al día, al abrir la app, AudioFlow Matrix pregunta a GitHub cuál es la última versión publicada.
+Si hay una más nueva aparece un aviso azul bajo la barra superior:
+
+- **Download** abre la página de esa versión en el navegador para descargarla (ahí está también su
+  SHA-256 para comprobar el archivo). La app no descarga ni instala nada por su cuenta.
+- **Ignore this version** deja de avisar de esa versión; **Later** lo oculta hasta el próximo arranque.
+- Se desactiva con **Check for updates**, abajo a la derecha (junto a la versión y los enlaces a GitHub y Ko-fi) o en la pestaña **Settings**. Ahí también está **Check now** para comprobarlo al momento. Sin Internet no pasa nada: lo reintenta
+  en el siguiente arranque.
+
 ## Qué probar
 
 - [ ] La app abre y Devices lista la tarjeta ASIO
@@ -143,19 +178,28 @@ puerto del mismo controlador.
 - [ ] Start arranca sin texto rojo y el DSP % se queda por debajo del 30 %
 - [ ] Con **Driver setting**, la frecuencia de la barra superior es la de la tarjeta
 - [ ] Traktor abre con "AudioFlow Matrix ASIO" y la app dice "ASIO client connected"
-- [ ] Un deck de Traktor suena por la tarjeta sin clics durante 30 minutos
+- [ ] Un deck de Traktor suena por la tarjeta sin clics durante 30 minutos, y en Devices los "bloques tarde"
+      se quedan en 0 (o dejan de subir tras crecer el búfer de seguridad)
 - [ ] DVS: el timecode llega a Traktor y el control responde sin retraso apreciable
 - [ ] Con búfer de 64 muestras sigue sin cortes
 - [ ] El micro USB aparece en la matriz, marca "locked" y dropouts = 0
 - [ ] Discord u OBS reciben el audio por CABLE Output limpio
+- [ ] Loopback: el sonido de un juego o del navegador aparece en Loopback L/R, dropouts = 0, también tras pausarlo
 - [ ] Denoise quita el ruido de fondo y la voz suena natural; activarlo/desactivarlo no hace clic
 - [ ] Gate se cierra en silencio, no se come el principio de las palabras ni corta los finales
 - [ ] PTT: en Discord/OBS no se te oye hasta pulsar; mantener/soltar sin clics; Toggle funciona
 - [ ] MIDI: el controlador aparece, "Last MIDI messages" muestra mensajes, Learn asigna el pad
 - [ ] Un pad asignado al PTT y otro al MUTE de un canal funcionan, también con la ventana minimizada
-- [ ] Cambiar ganancia, mute o paneo no produce clics
+- [ ] Cambiar volumen, mute o paneo no produce clics
+- [ ] En el Mezclador, doble clic en el número de dB permite escribir la ganancia; doble clic en el fader la
+      vuelve a 0 dB; la tira del micro sube hasta +24 dB
+- [ ] Renombrar una entrada y una salida: el nombre nuevo aparece en Matrix, Mixer y MIDI y se mantiene al reabrir
 - [ ] Cerrar y reabrir la app conserva el ruteo, el dispositivo MIDI y las asignaciones
 - [ ] Cerrar y reabrir Traktor con la app en marcha reconecta solo
+- [ ] Con una versión antigua instalada, al abrir aparece el aviso de versión nueva y **Download** abre su página
+- [ ] En **Settings > Language** el idioma cambia al momento y se mantiene al cerrar y reabrir la app
+- [ ] Con **Settings > Minimize to the system tray**, al minimizar desaparece de la barra de tareas y queda el icono junto al reloj; el audio sigue sonando, clic lo abre y clic derecho > Salir lo cierra
+- [ ] En **Settings > Interface smoothness**, 15/30/60 fps y "igual que la pantalla" cambian la suavidad de los medidores; con otra ventana delante la app gasta menos (baja a 15 fps)
 
 ## Problemas comunes
 
@@ -167,9 +211,10 @@ puerto del mismo controlador.
 | Traktor: "audio engine is stopped" | La app está abierta sin Start | Pulsar Start |
 | Traktor no deja elegir otra frecuencia | La frecuencia la impone la tarjeta | Usar en Traktor la de la barra superior |
 | Clics o cortes en todo | Búfer demasiado pequeño | Subir el búfer a 128 o 256 |
-| Clics solo en el micro | No está "locked" o hay dropouts | Probar sin Exclusive; cerrar apps que usen el micro |
+| Clics solo en el micro | No está "locked" o hay dropouts | Cerrar apps que usen el micro y Apply and restart audio |
+| Un juego o Discord no detecta el micro | El micro está en Exclusive mode | Desmarcar Exclusive mode y Apply and restart audio |
 | El micro sale "shared" | Otra app lo está usando | Cerrar Discord/navegador y Apply and restart audio |
-| Denoise desactivado con aviso amarillo | El micro no va a 48 kHz | Marcar Exclusive mode y Apply and restart audio |
+| Denoise desactivado con aviso amarillo | El micro no va a 48 kHz | En Windows, Sonido > micro > Propiedades avanzadas: 48000 Hz (o marcar Exclusive mode, que bloquea el micro a otras apps) |
 | Discord no oye nada | Falta CABLE Output, rutas a Stream o PTT cerrado | Revisar el micro en Discord, Stream L/R en la matriz y el PTT |
 | Bajar un solo fader de Stream no cambia nada en Discord | Discord mezcla L y R en mono | Mover los dos faders de Stream |
 | MIDI: aviso naranja "in use by another program" | Otro programa (p. ej. Traktor) tiene el puerto | Liberarlo en ese programa u otro puerto, y Refresh |

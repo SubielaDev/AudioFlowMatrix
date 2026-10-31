@@ -31,13 +31,17 @@ public:
     void begin(double sampleRate, std::uint32_t blockFrames, std::uint32_t inputLatency, std::uint32_t outputLatency);
     void end();
 
-    [[nodiscard]] std::shared_ptr<IInputEndpoint> inputEndpoint() const { return input_; }
+    [[nodiscard]] std::shared_ptr<IInputEndpoint> inputEndpoint() const;
     [[nodiscard]] std::shared_ptr<IOutputEndpoint> outputEndpoint() const { return output_; }
 
     [[nodiscard]] bool clientConnected() const noexcept;
     [[nodiscard]] std::uint32_t clientPid() const noexcept;
     [[nodiscard]] std::uint64_t clientBlocks() const noexcept;
-    [[nodiscard]] std::uint64_t clientUnderruns() const noexcept;
+    // The safety reserve for the client's output, in blocks; client blocks that arrived late
+    // even so (each one a gap); and whether a "running" client has stopped producing.
+    [[nodiscard]] std::uint32_t safetyBlocks() const noexcept;
+    [[nodiscard]] std::uint64_t lateBlocks() const noexcept;
+    [[nodiscard]] bool clientStalled() const noexcept;
 
 private:
     class Input;
@@ -47,7 +51,7 @@ private:
     HANDLE tick_ = nullptr;
     void* base_ = nullptr;
     bridge::View view_{};
-    std::shared_ptr<IInputEndpoint> input_;
+    std::shared_ptr<Input> input_;
     std::shared_ptr<IOutputEndpoint> output_;
 };
 

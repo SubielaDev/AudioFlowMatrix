@@ -359,6 +359,17 @@ void testRoutingModel() {
     loaded.setLayout({"Mic", "Deck A", "New"}, {"Out R"}, {afm::PanSide::Mono});
     AFM_CHECK(loaded.at(0, 0).routed && loaded.at(0, 0).gainDb == -6.0f);
     AFM_CHECK(!loaded.at(0, 1).routed && !loaded.at(0, 2).routed);
+
+    // A mic strip at the top of its fader (+24 dB) is applied in full and survives save/load.
+    loaded.input(0).gainDb = afm::kMicFaderMaxDb;
+    loaded.compile(*c);
+    AFM_CHECK(std::fabs(c->gain[0][0] - 0.5012f * 15.849f) < 1e-2f);  // -6 dB crosspoint x +24 dB strip
+    std::stringstream mic;
+    loaded.save(mic);
+    afm::RoutingModel reloaded;
+    reloaded.load(mic);
+    reloaded.setLayout({"Mic"}, {"Out R"}, {afm::PanSide::Mono});
+    AFM_CHECK(reloaded.input(0).gainDb == afm::kMicFaderMaxDb);
 }
 
 } // namespace

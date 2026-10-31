@@ -1,5 +1,7 @@
 #include "VirtualAsioServer.h"
 
+#include "afm/asio/ClientReceiver.h"
+
 #include <cstring>
 
 namespace afm::asio {
@@ -12,32 +14,18 @@ bool clientRunning(const bridge::Header& h) noexcept {
 
 } // namespace
 
-// Client ASIO outputs -> matrix inputs.
+// Client ASIO outputs -> matrix inputs, through a safety reserve (ClientReceiver.h).
 class VirtualAsioServer::Input final : public IInputEndpoint {
 public:
     explicit Input(const bridge::View& view) : view_(view) {}
+
+    bridge::ClientReceiver receiver;
 
     std::string_view name() const noexcept override { return "AudioFlow ASIO"; }
     std::uint32_t numChannels() const noexcept override { return bridge::kChannels; }
     std::string channelName(std::uint32_t ch) const override { return "ASIO Client Out " + std::to_string(ch + 1); }
 
-    void pull(AudioBlock dst) noexcept override {
-        bridge::SharedRing& ring = view_.fromClient;
-        if (!clientRunning(*view_.header)) {
-            ring.discard(ring.readableFrames());
-            for (std::uint32_t ch = 0; ch < dst.numChannels; ++ch) {
-                std::memset(dst.channels[ch], 0, dst.numFrames * sizeof(float));
-            }
-            return;
-        }
-        // The client produces exactly one block per tick. If it fell behind and then
-        // caught up, keep only the newest block so latency never accumulates.
-        const std::size_t available = ring.readableFrames();
-        if (available > dst.numFrames) {
-            ring.discard(available - dst.numFrames);
-        }
-        ring.read(dst);
-    }
+    void pull(AudioBlock dst) noexcept override { receiver.pull(view_.fromClient, *view_.header, dst); }
 
 private:
     bridge::View view_;
@@ -127,7 +115,10 @@ void VirtualAsioServer::begin(double sampleRate, std::uint32_t blockFrames, std:
     h.sampleRate = sampleRate;
     h.blockFrames = blockFrames;
     h.inputLatency = inputLatency;
-    h.outputLatency = outputLatency;
+    // The client's output reaches the engine through the safety reserve: report it as latency
+    // so the host (e.g. Traktor) can compensate. Growth after late blocks is not reported.
+    h.outputLatency = outputLatency + bridge::ClientReceiver::kInitialSafety * blockFrames;
+    input_->receiver.requestReset();
     h.generation.store(h.generation.load(std::memory_order_relaxed) + 1, std::memory_order_relaxed);
     h.serverState.store(bridge::kServerRunning, std::memory_order_release);
 }
@@ -150,8 +141,14 @@ std::uint64_t VirtualAsioServer::clientBlocks() const noexcept {
     return isOpen() ? view_.header->clientBlocks.load(std::memory_order_relaxed) : 0;
 }
 
-std::uint64_t VirtualAsioServer::clientUnderruns() const noexcept {
-    return isOpen() ? view_.fromClient.underruns() : 0;
+std::shared_ptr<IInputEndpoint> VirtualAsioServer::inputEndpoint() const { return input_; }
+
+std::uint32_t VirtualAsioServer::safetyBlocks() const noexcept {
+    return input_ ? input_->receiver.safetyBlocks() : bridge::ClientReceiver::kInitialSafety;
 }
+
+std::uint64_t VirtualAsioServer::lateBlocks() const noexcept { return input_ ? input_->receiver.lateBlocks() : 0; }
+
+bool VirtualAsioServer::clientStalled() const noexcept { return input_ && input_->receiver.stalled(); }
 
 } // namespace afm::asio

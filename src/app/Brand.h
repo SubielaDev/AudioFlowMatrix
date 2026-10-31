@@ -20,8 +20,10 @@ void releaseTextures();
 
 // Draws the wordmark `height` pixels tall at the cursor. No-op before loadTextures().
 void wordmark(float height);
+// Width of the wordmark when drawn `height` pixels tall.
+[[nodiscard]] float wordmarkWidth(float height);
 
 // Fills [p0, p1] with the logo gradient (cyan top-left, violet bottom-right).
-void gradientRect(ImDrawList* dl, ImVec2 p0, ImVec2 p1);
+void gradientRect(ImDrawList* dl, ImVec2 p0, ImVec2 p1, float rounding = 0.0f);
 
 } // namespace afm::app::brand

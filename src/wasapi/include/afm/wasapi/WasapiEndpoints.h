@@ -30,6 +30,10 @@ struct StreamConfig {
     double engineRate = 48000.0;
     std::uint32_t engineBlockFrames = 128;
 
+    // Capture only: `deviceId` is a render device and the stream records what Windows plays
+    // on it (WASAPI loopback). Always shared mode.
+    bool loopback = false;
+
     // Capture only: initial voice-processing settings, applied before the stream starts.
     bool denoise = false;
     bool gate = false;

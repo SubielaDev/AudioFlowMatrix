@@ -7,6 +7,12 @@ add_executable(AudioFlowMatrix WIN32
     Log.cpp
     Ptt.cpp
     Driver.cpp
+    WindowChrome.cpp
+    I18n.cpp
+    Tray.cpp
+    PerfTest.cpp
+    UpdateCheck.cpp
+    UpdateUi.cpp
     app.rc
     ${CMAKE_CURRENT_BINARY_DIR}/driver.rc)
 
@@ -16,11 +22,13 @@ target_link_libraries(AudioFlowMatrix PRIVATE
     afm::midi
     imgui
     shell32
-    dbghelp)
+    dbghelp
+    winhttp)
 afm_configure_target(AudioFlowMatrix)
 afm_safe_dll_search(AudioFlowMatrix)
 string(TIMESTAMP AFM_BUILD_TIME "%Y-%m-%d %H:%M")
-target_compile_definitions(AudioFlowMatrix PRIVATE AFM_VERSION_STRING="${PROJECT_VERSION}, built ${AFM_BUILD_TIME}")
+target_compile_definitions(AudioFlowMatrix PRIVATE AFM_VERSION="${PROJECT_VERSION}"
+    AFM_VERSION_STRING="${PROJECT_VERSION}, built ${AFM_BUILD_TIME}")
 
 if(MINGW)
     target_link_options(AudioFlowMatrix PRIVATE -municode)  # wWinMain entry point

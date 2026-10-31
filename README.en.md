@@ -60,13 +60,30 @@ flowchart LR
 
 ## Features
 
-- **Routing matrix**, NxM, with gain, mute and pan per crosspoint, plus faders and meters per channel.
-- **Virtual ASIO driver** for Traktor and DAWs, locked to the master interface.
+- **Routing matrix**, NxM, with volume (0 to 100), mute and pan per crosspoint, each input and output volume right
+  in the matrix, custom channel names, plus faders and meters per channel.
+- **Mixer** with faders and meters per channel; the gain in dB can be typed (double-click the number) and
+  the mic strip goes up to +24 dB.
+- **Virtual ASIO driver** for Traktor and DAWs, locked to the master interface, with a safety buffer that
+  avoids clicks when Traktor delivers a block late (it grows by itself if needed). The app only asks to
+  update the driver when it really changed, not with every version.
 - **USB mic** over WASAPI (exclusive or shared) with clock-drift compensation.
 - **Denoise** with RNNoise and a **noise gate** (threshold −60 to −20 dB, smooth hold and release).
+- **Windows sound loopback**: whatever plays on a playback device (a game, Discord, the browser) comes
+  into the matrix as another input.
 - Optional **push-to-talk** from the mic to the Stream output, hold or toggle.
 - **MIDI control**: a MIDI tab with MIDI Learn for push-to-talk and every channel's MUTE.
 - **Diagnostics**: a MIDI/PTT/audio log and crash reports with the exact function and line.
+- **Update notice**: once a day it asks GitHub for the latest release and, if it is newer, shows a notice
+  with a button that opens its page. Nothing is downloaded or installed automatically; turn it off in
+  *Check for updates* at the bottom right (next to the version and the GitHub and Ko-fi links) or in the
+  Settings tab, which can also check right away.
+- **Light on the CPU**: the interface runs at 60 fps (about 3% of one core) and drops to 15 fps on its own in
+  the background. Settings offers 15, 30 or 60 fps, or the monitor refresh rate.
+- **Minimize to the tray** (optional, in Settings): minimized, it stays as an icon next to the clock with
+  audio and MIDI running; click it to open, right-click to exit.
+- **Several languages**: English, Spanish, Portuguese, French, German, Italian and Russian, chosen in the
+  Settings tab. The first time it follows the Windows display language.
 
 ## Using it
 
@@ -85,8 +102,27 @@ flowchart LR
      cable such as VB-CABLE: render to *CABLE Input*, use *CABLE Output* as the mic there).
 3. Press **Start**. In Traktor: *Preferences > Audio Setup > AudioFlow Matrix ASIO*, at the
    interface's sample rate.
-4. **Matrix** tab: click a cell to route, right-click for gain / mute / pan.
+4. **Matrix** tab: click a cell to route, right-click for volume / mute / pan.
    **Mixer** tab: input and output-bus faders with peak meters.
+
+### Matrix and mixer
+
+- **Volumes from 0 to 100** in the matrix: 100 is the original level (0 dB) and 0 is silence. Each row
+  carries its input's volume and the last row each output's; drag them or double-click to type.
+- **Right-click a name** (in the Matrix or the Mixer) to rename the channel. Only the shown name
+  changes: routes and MIDI mappings keep working. *Settings > Restore all channel names* goes back
+  to the originals.
+- Device groups in a checkerboard, and the row and column under the mouse lit up.
+- In the **Mixer**, the number under each fader is its gain in dB: drag it, or double-click and type
+  (-60 = off; up to +12, or +24 on the mic). Double-click a fader to put it back at 0 dB.
+
+### Traktor: safety buffer
+
+With Traktor connected, **Devices** shows its PID, the **safety buffer** (blocks and ms) and the
+**late blocks** in the last 10 s and in total. A late block is a short gap (a click) in Traktor's
+audio; when one happens the buffer grows by one block (up to 4) so it does not happen again, and it
+is written to the log. If Traktor stops sending audio without disconnecting, the app says so: restart
+its audio in *Preferences > Audio Setup*.
 
 ### Mic: denoise and gate
 
@@ -130,7 +166,8 @@ detected ASIO and WASAPI devices and which driver DLL is in use.
 | Path | Added by AudioFlow Matrix |
 |---|---|
 | ASIO in → matrix → ASIO out | 0 (same callback) |
-| Traktor ↔ matrix | 1 block (e.g. 64 samples = 1.33 ms @ 48 kHz) |
+| Matrix → Traktor (Traktor's inputs) | 1 block (e.g. 256 samples = 5.33 ms @ 48 kHz) |
+| Traktor → matrix (Traktor's outputs) | 2 blocks: 1 for the bridge + 1 safety buffer (more if it grows) |
 | USB mic → matrix | WASAPI period + ~1.5 blocks of ring headroom |
 | USB mic with denoise available (at 48 kHz) | + 30 ms (1440 samples: 480 re-blocking + 960 RNNoise) |
 
@@ -148,8 +185,9 @@ src/midi      MIDI decoding, bindings and MidiMap (portable) + WinMM input
 src/platform  Win32 helpers: COM pointer, MMCSS, UTF-8
 src/asio      ASIO ABI, host for the master driver, virtual driver DLL + shared-memory bridge
 src/wasapi    WASAPI capture/render endpoints (exclusive with shared fallback)
-src/app       Dear ImGui front-end (Win32 + OpenGL 3), PTT/MIDI, log and crash reports
-tests         core and engine, voice (RNNoise/gate), PTT/MIDI
+src/app       Dear ImGui front-end (Win32 + OpenGL 3), settings, languages, tray, PTT/MIDI, log and crash reports
+tests         core and engine, voice (RNNoise/gate), PTT/MIDI, ASIO bridge, update notice, languages,
+              driver identity
 tools         brand_assets.py: builds the icon and embedded logo from docs/assets
 third_party   Dear ImGui 1.91.8 (MIT), RNNoise 0.2 (BSD-3-Clause)
 ```
@@ -179,4 +217,5 @@ GUI-subsystem application, so it opens no console window.
 ## License
 
 MIT, see [LICENSE](LICENSE). Dear ImGui is MIT licensed by Omar Cornut. RNNoise is
-BSD-3-Clause licensed (see `third_party/rnnoise/COPYING`).
+BSD-3-Clause licensed (see `third_party/rnnoise/COPYING`). The GitHub icon in the interface is the
+"mark-github" icon from [Octicons](https://github.com/primer/octicons) (MIT, GitHub Inc.).

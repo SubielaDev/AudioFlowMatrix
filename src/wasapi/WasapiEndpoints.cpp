@@ -298,7 +298,7 @@ private:
         const auto mixChannels = static_cast<std::uint16_t>(mix->nChannels);
         const DWORD mixRate = mix->nSamplesPerSec;
 
-        if (config_.exclusive) {
+        if (config_.exclusive && !config_.loopback) {
             // The engine rate first (no rate conversion), unless the denoiser needs 48 kHz; the
             // drift resampler converts whatever rate the device ends up at.
             const DWORD first = config_.denoise ? 48000 : static_cast<DWORD>(config_.engineRate);
@@ -332,7 +332,8 @@ private:
             error_ = "Unsupported device mix format";
             return false;
         }
-        hr = client_->Initialize(AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_EVENTCALLBACK, 0, 0, mix, nullptr);
+        const DWORD flags = AUDCLNT_STREAMFLAGS_EVENTCALLBACK | (config_.loopback ? AUDCLNT_STREAMFLAGS_LOOPBACK : 0);
+        hr = client_->Initialize(AUDCLNT_SHAREMODE_SHARED, flags, 0, 0, mix, nullptr);
         CoTaskMemFree(mix);
         if (FAILED(hr)) return fail("Could not open the device", hr);
         negotiated_ = shared;
@@ -415,17 +416,36 @@ private:
             return;
         }
 
+        // Loopback: Windows delivers no packets while nothing plays on the device (and the event
+        // may not fire at all), so poll every half period and fill quiet gaps with silence on
+        // the wall clock; otherwise the ring would run dry and re-prime on every pause.
+        const bool loopback = config_.loopback;
+        const double rate = negotiated_.rate;
+        const double periodSeconds = info_.periodFrames / rate;
+        LARGE_INTEGER qpcFrequency;
+        QueryPerformanceFrequency(&qpcFrequency);
+        const auto seconds = [&] {
+            LARGE_INTEGER t;
+            QueryPerformanceCounter(&t);
+            return static_cast<double>(t.QuadPart) / static_cast<double>(qpcFrequency.QuadPart);
+        };
+        double quietSince = seconds();
+        std::uint64_t quietFrames = 0;
+        const DWORD waitMs = loopback ? std::max<DWORD>(1, static_cast<DWORD>(periodSeconds * 500)) : 2000;
+
         const HANDLE waits[2] = {stopEvent_, audioEvent_};
         const std::uint32_t devCh = negotiated_.channels;
         for (;;) {
-            const DWORD r = WaitForMultipleObjects(2, waits, FALSE, 2000);
+            const DWORD r = WaitForMultipleObjects(2, waits, FALSE, waitMs);
             if (r == WAIT_OBJECT_0) break;
-            if (r != WAIT_OBJECT_0 + 1) continue;  // timeout: device stalled, keep waiting
+            if (r != WAIT_OBJECT_0 + 1 && !loopback) continue;  // timeout: device stalled, keep waiting
 
             HRESULT hr = S_OK;
             if (capture_) {
+                bool gotData = false;
                 UINT32 packet = 0;
                 while (SUCCEEDED(hr = captureClient_->GetNextPacketSize(&packet)) && packet > 0) {
+                    gotData = true;
                     BYTE* data = nullptr;
                     UINT32 frames = 0;
                     DWORD flags = 0;
@@ -439,6 +459,24 @@ private:
                     }
                     captureClient_->ReleaseBuffer(frames);
                     callback_(lanes.data(), endpointChannels_, n);
+                }
+                if (loopback && SUCCEEDED(hr)) {
+                    if (gotData) {
+                        quietSince = seconds();
+                        quietFrames = 0;
+                    } else if (const double quiet = seconds() - quietSince; quiet > 1.5 * periodSeconds) {
+                        // Owed since the last packet, which covered the time up to its arrival.
+                        auto owed = static_cast<std::int64_t>(quiet * rate) - static_cast<std::int64_t>(quietFrames);
+                        if (owed > 0) {
+                            for (float* lane : lanes) std::memset(lane, 0, bufferFrames_ * sizeof(float));
+                        }
+                        while (owed > 0) {
+                            const auto n = static_cast<std::uint32_t>(std::min<std::int64_t>(owed, bufferFrames_));
+                            callback_(lanes.data(), endpointChannels_, n);
+                            quietFrames += n;
+                            owed -= n;
+                        }
+                    }
                 }
             } else {
                 UINT32 frames = bufferFrames_;
