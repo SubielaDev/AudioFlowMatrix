@@ -97,8 +97,16 @@ ASIOBool VirtualAsioDriver::init(void*) {
         return ASIOFalse;
     }
     generation_ = h.generation.load(std::memory_order_acquire);
-    sampleRate_ = h.sampleRate;
-    blockFrames_ = static_cast<long>(h.blockFrames);
+    // Shared memory is writable by any process of the user: never size buffers from an
+    // unchecked value.
+    const double rate = h.sampleRate;
+    const std::uint32_t block = h.blockFrames;
+    if (!bridge::validFormat(rate, block)) {
+        setError("AudioFlow Matrix reported an invalid audio format. Restart AudioFlow Matrix.");
+        return ASIOFalse;
+    }
+    sampleRate_ = rate;
+    blockFrames_ = static_cast<long>(block);
     inputLatency_ = static_cast<long>(h.inputLatency);
     outputLatency_ = static_cast<long>(h.outputLatency);
     error_[0] = '\0';
@@ -243,7 +251,7 @@ ASIOError VirtualAsioDriver::start() {
     if (running_) return ASE_OK;
 
     // We are the consumer of toClient: drop whatever is stale from a previous session.
-    view_.toClient.core->discard(view_.toClient.core->readableFrames());
+    view_.toClient.discard(view_.toClient.readableFrames());
     samplePosition_.store(0);
     bufferIndex_ = 0;
     resetSent_ = false;
@@ -302,12 +310,12 @@ void VirtualAsioDriver::processBlock() noexcept {
     bufferIndex_ ^= 1;
 
     // Engine -> host inputs. Keep only the newest block if we fell behind.
-    AudioRingCore& rx = *view_.toClient.core;
+    bridge::SharedRing& rx = view_.toClient;
     const std::size_t available = rx.readableFrames();
     if (available > static_cast<std::size_t>(frames)) {
         rx.discard(available - static_cast<std::size_t>(frames));
     }
-    rx.read(view_.toClient.data, AudioBlock{scratchIn_.data(), kChannels, static_cast<std::uint32_t>(frames)});
+    rx.read(AudioBlock{scratchIn_.data(), kChannels, static_cast<std::uint32_t>(frames)});
     for (std::uint32_t ch = 0; ch < kChannels; ++ch) {
         if (std::int32_t* dst = inHalves_[ch * 2 + static_cast<std::size_t>(index)]) {
             fromFloat(ASIOSTInt32LSB, scratchIn_[ch], dst, frames);
@@ -338,8 +346,7 @@ void VirtualAsioDriver::processBlock() noexcept {
             std::memset(scratchOut_[ch], 0, static_cast<std::size_t>(frames) * sizeof(float));
         }
     }
-    view_.fromClient.core->write(view_.fromClient.data,
-                                 ConstAudioBlock{scratchOut_.data(), kChannels, static_cast<std::uint32_t>(frames)});
+    view_.fromClient.write(ConstAudioBlock{scratchOut_.data(), kChannels, static_cast<std::uint32_t>(frames)});
 
     samplePosition_.store(position + static_cast<std::uint64_t>(frames), std::memory_order_release);
     bridge::Header& h = *view_.header;

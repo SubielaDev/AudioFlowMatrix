@@ -22,7 +22,7 @@ public:
     std::string channelName(std::uint32_t ch) const override { return "ASIO Client Out " + std::to_string(ch + 1); }
 
     void pull(AudioBlock dst) noexcept override {
-        AudioRingCore& ring = *view_.fromClient.core;
+        bridge::SharedRing& ring = view_.fromClient;
         if (!clientRunning(*view_.header)) {
             ring.discard(ring.readableFrames());
             for (std::uint32_t ch = 0; ch < dst.numChannels; ++ch) {
@@ -36,7 +36,7 @@ public:
         if (available > dst.numFrames) {
             ring.discard(available - dst.numFrames);
         }
-        ring.read(view_.fromClient.data, dst);
+        ring.read(dst);
     }
 
 private:
@@ -56,7 +56,7 @@ public:
         if (!clientRunning(*view_.header)) {
             return;
         }
-        view_.toClient.core->write(view_.toClient.data, src);
+        view_.toClient.write(src);
         SetEvent(tick_);  // non-blocking; wakes the client's audio thread
     }
 
@@ -151,7 +151,7 @@ std::uint64_t VirtualAsioServer::clientBlocks() const noexcept {
 }
 
 std::uint64_t VirtualAsioServer::clientUnderruns() const noexcept {
-    return isOpen() ? view_.fromClient.core->underruns() : 0;
+    return isOpen() ? view_.fromClient.underruns() : 0;
 }
 
 } // namespace afm::asio
