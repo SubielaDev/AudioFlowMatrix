@@ -13,13 +13,7 @@
 </p>
 <p align="center">
   <img src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6?style=for-the-badge&logo=data:image/svg%2Bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0id2hpdGUiPjxwYXRoIGQ9Ik0wIDBoMTEuNHYxMS40SDB6TTEyLjYgMEgyNHYxMS40SDEyLjZ6TTAgMTIuNmgxMS40VjI0SDB6TTEyLjYgMTIuNkgyNFYyNEgxMi42eiIvPjwvc3ZnPg==&logoColor=white" alt="Windows">
-  <img src="https://img.shields.io/badge/C%2B%2B-20-00599C?style=for-the-badge&logo=cplusplus&logoColor=white" alt="C++20">
-  <img src="https://img.shields.io/badge/CMake-3.25%2B-064F8C?style=for-the-badge&logo=cmake&logoColor=white" alt="CMake">
-  <img src="https://img.shields.io/badge/ASIO-low%20latency-E11D48?style=for-the-badge" alt="ASIO">
-  <img src="https://img.shields.io/badge/WASAPI-audio-6366F1?style=for-the-badge" alt="WASAPI">
-  <img src="https://img.shields.io/badge/SIMD-AVX2%20%2F%20FMA-F59E0B?style=for-the-badge" alt="AVX2">
-  <img src="https://img.shields.io/badge/UI-Dear%20ImGui-1F2937?style=for-the-badge" alt="Dear ImGui">
-  <img src="https://img.shields.io/badge/denoise-RNNoise-10B981?style=for-the-badge" alt="RNNoise">
+ 
 </p>
 
 **Español** · [English](README.en.md)
