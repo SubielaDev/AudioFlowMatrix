@@ -74,15 +74,14 @@ flowchart LR
 1. Descarga `AudioFlowMatrix-Portable-<versión>.exe` desde
    [Releases](https://github.com/SubielaDev/AudioFlowMatrix/releases) y guárdalo en una carpeta fija.
    Es un solo archivo, sin instalación: lleva dentro el driver ASIO virtual y, al registrarlo, lo
-   extrae a `%LOCALAPPDATA%\AudioFlowMatrix\driver`. Windows mostrará "Windows protegió su PC"
+   instala en `C:\Program Files\AudioFlow Matrix\driver` (carpeta protegida). Windows mostrará "Windows protegió su PC"
    porque el programa no está firmado: *Más información > Ejecutar de todas formas*.
 2. Abre AudioFlow Matrix y ve a la pestaña **Devices**:
    - elige el driver ASIO maestro (p. ej. *Focusrite USB ASIO*). En **Sample rate**,
      *Driver setting* mantiene la frecuencia que ya tenga la tarjeta; el tamaño de búfer es
      el del panel de la tarjeta (256 muestras si el driver no lo informa);
    - pulsa una vez **Register driver (administrator)**, que instala "AudioFlow Matrix ASIO". Si el
-     driver está registrado desde otra copia (otra carpeta o versión), la app lo avisa y ofrece
-     **Use this copy**;
+     driver registrado es de otra versión, la app lo avisa y ofrece **Update driver**;
    - opcionalmente activa el micro USB y la salida de stream (para Discord/OBS usa un cable
      virtual como VB-CABLE: envía el audio a *CABLE Input* y elige *CABLE Output* como micro allí).
 3. Pulsa **Start**. En Traktor: *Preferences > Audio Setup > AudioFlow Matrix ASIO*, a la misma
@@ -123,7 +122,7 @@ Pestaña **MIDI**:
 | Ajustes | `%APPDATA%\AudioFlowMatrix\settings.ini` |
 | Log de diagnóstico (sesión actual y anterior) | `%APPDATA%\AudioFlowMatrix\logs` |
 | Informes de crash (`.txt` + `.dmp`) | `%APPDATA%\AudioFlowMatrix\crashes` |
-| Driver ASIO virtual (extraído del `.exe`) | `%LOCALAPPDATA%\AudioFlowMatrix\driver` |
+| Driver ASIO virtual (instalado desde el `.exe`) | `C:\Program Files\AudioFlow Matrix\driver` |
 
 Los informes de crash indican módulo y dirección del fallo; con los `.pdb` de esa misma
 compilación junto al ejecutable muestran también la función y la línea.

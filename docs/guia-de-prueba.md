@@ -36,15 +36,15 @@ entrada puede ir a cualquier salida.
 ## Instalación
 
 1. Descarga `AudioFlowMatrix-Portable-<versión>.exe` y guárdalo en una carpeta fija (es un solo
-   archivo, sin instalar; lleva dentro el driver ASIO, que se extrae a
-   `%LOCALAPPDATA%\AudioFlowMatrix\driver`).
+   archivo, sin instalar; lleva dentro el driver ASIO, que al registrarlo se
+   instala en `C:\Program Files\AudioFlow Matrix\driver`).
 2. Ábrelo. Si aparece "Windows protegió su PC", pulsa **Más información** y luego **Ejecutar de
    todas formas** (el programa no está firmado).
 3. Ve a la pestaña **Devices**. En **Driver**, elige el de tu tarjeta. En **Sample rate**, deja
    **Driver setting** para usar la frecuencia que ya tenga la tarjeta (o elige una concreta).
 4. Pulsa **Register driver (administrator)** y acepta el aviso de Windows. Debe aparecer en verde
-   "AudioFlow Matrix ASIO is registered". Solo se hace una vez. Si dice que está registrado desde
-   otra copia (otra carpeta o versión), pulsa **Use this copy**.
+   "AudioFlow Matrix ASIO is registered". Solo se hace una vez. Si dice que el driver registrado es de
+   otra versión, pulsa **Update driver**.
 5. Pulsa **Start**. La barra superior debe mostrar el driver, la frecuencia y el tamaño de búfer.
 
 El tamaño de búfer se cambia en el panel de la propia tarjeta (botón **Open driver control panel**).
@@ -193,5 +193,5 @@ Abre un [issue](https://github.com/SubielaDev/AudioFlowMatrix/issues) con:
 ## Desinstalar
 
 1. En Devices, pulsa **Unregister**.
-2. Borra el `.exe` y la carpeta `%LOCALAPPDATA%\AudioFlowMatrix` (el driver extraído).
+2. Borra el `.exe` y la carpeta `C:\Program Files\AudioFlow Matrix\driver` (pide permiso de administrador).
 3. Opcional: borra `%APPDATA%\AudioFlowMatrix` (ajustes, log e informes).

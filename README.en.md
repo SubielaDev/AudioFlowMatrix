@@ -72,16 +72,15 @@ flowchart LR
 
 1. Download `AudioFlowMatrix-Portable-<version>.exe` from
    [Releases](https://github.com/SubielaDev/AudioFlowMatrix/releases) and keep it in a fixed folder.
-   It is a single file, no install: it carries the virtual ASIO driver and unpacks it to
-   `%LOCALAPPDATA%\AudioFlowMatrix\driver` when you register it. Windows shows "Windows protected
+   It is a single file, no install: it carries the virtual ASIO driver and installs it to
+   `C:\Program Files\AudioFlow Matrix\driver` (a protected folder) when you register it. Windows shows "Windows protected
    your PC" because the program is not signed: *More info > Run anyway*.
 2. Run AudioFlow Matrix and open **Devices**:
    - pick the master ASIO driver (e.g. *Focusrite USB ASIO*). **Sample rate** *Driver setting*
      keeps whatever rate the interface is running at; the buffer size is the one in the
      interface's control panel (256 samples if the driver does not report it);
    - press **Register driver (administrator)** once, which installs "AudioFlow Matrix ASIO". If the
-     driver is registered from another copy (another folder or version), the app says so and
-     offers **Use this copy**;
+     registered driver is another version's, the app says so and offers **Update driver**;
    - optionally enable the USB mic and the stream output (for Discord/OBS use a virtual
      cable such as VB-CABLE: render to *CABLE Input*, use *CABLE Output* as the mic there).
 3. Press **Start**. In Traktor: *Preferences > Audio Setup > AudioFlow Matrix ASIO*, at the
@@ -120,7 +119,7 @@ red **ON AIR**. Opening and closing fade over ~10 ms.
 | Settings | `%APPDATA%\AudioFlowMatrix\settings.ini` |
 | Diagnostics log (current and previous run) | `%APPDATA%\AudioFlowMatrix\logs` |
 | Crash reports (`.txt` + `.dmp`) | `%APPDATA%\AudioFlowMatrix\crashes` |
-| Virtual ASIO driver (unpacked from the `.exe`) | `%LOCALAPPDATA%\AudioFlowMatrix\driver` |
+| Virtual ASIO driver (installed from the `.exe`) | `C:\Program Files\AudioFlow Matrix\driver` |
 
 Crash reports give the module and offset of the fault; with the same build's `.pdb` files next
 to the executable they also name the function and line. `AudioFlowMatrix.exe --list` prints the
