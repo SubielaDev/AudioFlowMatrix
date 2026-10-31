@@ -78,12 +78,13 @@ void App::refreshDevices() {
     drivers_ = asio::listDrivers();
     captureDevices_ = wasapi::listDevices(true);
     renderDevices_ = wasapi::listDevices(false);
-    std::string driverError;
-    driverDll_ = driver::dllPath(driverError);
-    if (!driverError.empty()) warnings_.push_back(driverError);
-    driverStatus_ = driver::status(driverDll_);
-    log_.write("Virtual ASIO driver: %s | registered from: %s", win::toUtf8(driverDll_).c_str(),
-               win::toUtf8(driver::registeredPath()).c_str());
+    driverStatus_ = driver::status();
+    log_.write("Virtual ASIO driver: registered from \"%s\" (%s); this build installs to \"%s\"",
+               win::toUtf8(driver::registeredPath()).c_str(),
+               driverStatus_ == driver::Status::Registered        ? "this build"
+               : driverStatus_ == driver::Status::NotRegistered ? "not registered"
+                                                                 : "another build",
+               win::toUtf8(driver::installPath()).c_str());
     listMidiDevices();
     if (settings_.driverName.empty() && !drivers_.empty()) {
         settings_.driverName = drivers_.front().name;
@@ -437,36 +438,18 @@ void App::saveSettings() const {
 // ---- Virtual driver registration ------------------------------------------------------------
 
 void App::registerVirtualDriver(bool install) {
-    // Unregistering through our own DLL works whichever copy is registered: it removes the
-    // driver's registry keys, not just its own path.
-    const std::wstring& dll = driverDll_;
-    if (dll.empty()) {
-        error_ = "The virtual ASIO driver DLL is not available.";
-        return;
-    }
-    const std::wstring params = std::wstring(install ? L"/s \"" : L"/u /s \"") + dll + L"\"";
-    SHELLEXECUTEINFOW sei{};
-    sei.cbSize = sizeof(sei);
-    sei.fMask = SEE_MASK_NOCLOSEPROCESS;
-    sei.hwnd = window_;
-    sei.lpVerb = L"runas";  // UAC prompt: writing HKLM needs administrator rights
-    sei.lpFile = L"regsvr32.exe";
-    sei.lpParameters = params.c_str();
-    sei.nShow = SW_HIDE;
-    if (!ShellExecuteExW(&sei)) {
-        error_ = "Driver registration was cancelled.";
-        return;
-    }
-    if (sei.hProcess != nullptr) {
-        WaitForSingleObject(sei.hProcess, 30000);
-        CloseHandle(sei.hProcess);
-    }
-    driverStatus_ = driver::status(driverDll_);
-    log_.write("Virtual ASIO driver %s -> %s", install ? "register" : "unregister",
+    // Runs this executable elevated; see Driver.h for why it never registers a DLL from a
+    // user-writable folder.
+    std::string error;
+    const bool ok = driver::runElevated(install, window_, error);
+    driverStatus_ = driver::status();
+    log_.write("Virtual ASIO driver %s: %s -> %s", install ? "register" : "unregister", ok ? "done" : error.c_str(),
                driverStatus_ == driver::Status::Registered        ? "registered"
                : driverStatus_ == driver::Status::NotRegistered ? "not registered"
-                                                                 : "registered from another copy");
-    if (install && driverStatus_ != driver::Status::Registered) {
+                                                                 : "registered from another build");
+    if (!ok) {
+        error_ = error;
+    } else if (install && driverStatus_ != driver::Status::Registered) {
         error_ = "Driver registration failed.";
     }
 }

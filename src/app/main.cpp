@@ -92,10 +92,12 @@ int listDevices() {
     for (const auto& d : afm::wasapi::listDevices(true)) std::printf("  %s\n", d.name.c_str());
     std::printf("WASAPI render devices:\n");
     for (const auto& d : afm::wasapi::listDevices(false)) std::printf("  %s\n", d.name.c_str());
-    std::string error;
-    const std::wstring dll = afm::app::driver::dllPath(error);
-    std::printf("Virtual ASIO driver DLL: %s%s\n", afm::win::toUtf8(dll).c_str(), error.c_str());
-    std::printf("Registered from: %s\n", afm::win::toUtf8(afm::app::driver::registeredPath()).c_str());
+    const auto status = afm::app::driver::status();
+    std::printf("Virtual ASIO driver installs to: %s\n", afm::win::toUtf8(afm::app::driver::installPath()).c_str());
+    std::printf("Registered from: %s (%s)\n", afm::win::toUtf8(afm::app::driver::registeredPath()).c_str(),
+                status == afm::app::driver::Status::Registered        ? "this build"
+                : status == afm::app::driver::Status::NotRegistered ? "not registered"
+                                                                     : "another build");
     std::fflush(stdout);
     return 0;
 }
@@ -108,6 +110,14 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR cmdLine, int) {
 
     if (cmdLine != nullptr && std::wcsstr(cmdLine, L"--list") != nullptr) {
         const int rc = listDevices();
+        CoUninitialize();
+        return rc;
+    }
+    // Elevated helper started by Devices > Register / Unregister (see Driver.h). Exact match
+    // only: these change machine-wide state and must not trigger on a substring.
+    if (cmdLine != nullptr && (std::wcscmp(cmdLine, L"--install-driver") == 0 || std::wcscmp(cmdLine, L"--uninstall-driver") == 0)) {
+        const int rc = std::wcscmp(cmdLine, L"--install-driver") == 0 ? afm::app::driver::installElevated()
+                                                                       : afm::app::driver::uninstallElevated();
         CoUninitialize();
         return rc;
     }

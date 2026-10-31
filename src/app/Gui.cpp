@@ -408,13 +408,14 @@ void App::drawDevices() {
         ImGui::SameLine();
         if (ImGui::SmallButton("Unregister")) registerVirtualDriver(false);
     } else if (driverStatus_ == driver::Status::RegisteredOther) {
-        // E.g. registered by the installer and now running the portable .exe, or the folder moved.
+        // Another build's driver (an older version, or one registered from a user folder).
         const std::wstring other = driver::registeredPath();
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.95f, 0.65f, 0.2f, 1));
-        ImGui::TextWrapped("The driver is registered from another copy of AudioFlow Matrix: %s",
+        ImGui::TextWrapped("The registered driver belongs to another version of AudioFlow Matrix: %s. "
+                           "Update it so Traktor uses this version's driver.",
                            other.empty() ? "(file missing)" : win::toUtf8(other).c_str());
         ImGui::PopStyleColor();
-        if (ImGui::Button("Use this copy (administrator)")) registerVirtualDriver(true);
+        if (ImGui::Button("Update driver (administrator)")) registerVirtualDriver(true);
         ImGui::SameLine();
         if (ImGui::SmallButton("Unregister")) registerVirtualDriver(false);
     } else {

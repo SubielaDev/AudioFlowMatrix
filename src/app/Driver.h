@@ -1,29 +1,40 @@
 #pragma once
 
+#include <windows.h>
+
 #include <string>
 
 namespace afm::app::driver {
 
-// Where the virtual ASIO driver DLL ("AudioFlow Matrix ASIO") lives.
+// The virtual ASIO driver ("AudioFlow Matrix ASIO").
 //
-// Installed or unzipped: AudioFlowMatrixASIO.dll next to the executable.
-// Portable (the .exe alone): the DLL is embedded in the executable and extracted to
-// %LOCALAPPDATA%\AudioFlowMatrix\driver\AudioFlowMatrixASIO-<content hash>.dll. The name
-// changes with the contents, so a newer build never has to overwrite a DLL that Traktor may
-// still have loaded; the old one just stops being registered.
+// Every build of the executable embeds the driver DLL. Registering it is machine-wide and
+// the DLL then gets loaded into any ASIO host, possibly an elevated one, so the registered
+// copy must not be writable by an ordinary process. Registration therefore runs this same
+// executable elevated (`--install-driver`): it copies the embedded DLL into
+// %ProgramFiles%\AudioFlow Matrix\driver (admin-only), checks the copy byte for byte and
+// registers it from there. Unregistering only deletes the driver's registry keys and never
+// loads whatever DLL happens to be registered.
 
 enum class Status {
     NotRegistered,
-    Registered,       // registered and pointing at the DLL this executable uses
-    RegisteredOther,  // registered, but from another copy (another folder, version or a missing file)
+    Registered,       // the registered DLL is this build's driver
+    RegisteredOther,  // registered, but another build, or the file is missing
 };
 
-// The DLL this executable uses, extracting the embedded copy if needed. Empty + `error` on failure.
-[[nodiscard]] std::wstring dllPath(std::string& error);
+[[nodiscard]] Status status();
 
-// The DLL Windows has registered for the driver's CLSID, or empty.
+// The DLL Windows has registered for the driver, or empty.
 [[nodiscard]] std::wstring registeredPath();
+// Where this build installs its driver.
+[[nodiscard]] std::wstring installPath();
 
-[[nodiscard]] Status status(const std::wstring& ourDll);
+// Asks for elevation (UAC) and runs this executable with --install-driver or
+// --uninstall-driver. False with `error` set if cancelled or failed.
+[[nodiscard]] bool runElevated(bool install, HWND owner, std::string& error);
+
+// The elevated side, called from wWinMain for those flags. Returns the process exit code.
+int installElevated();
+int uninstallElevated();
 
 } // namespace afm::app::driver

@@ -123,7 +123,6 @@ private:
     std::vector<asio::DriverEntry> drivers_;
     std::vector<wasapi::DeviceInfo> captureDevices_;
     std::vector<wasapi::DeviceInfo> renderDevices_;
-    std::wstring driverDll_;  // the virtual driver DLL this executable uses (next to it, or unpacked)
     driver::Status driverStatus_ = driver::Status::NotRegistered;
 
     asio::AsioHost host_;
