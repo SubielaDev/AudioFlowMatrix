@@ -1,6 +1,6 @@
 <h1 align="center"><img src="docs/assets/logo.jpg" alt="AudioFlow Matrix" width="640"></h1>
 <p align="center">
-  <a href="https://github.com/SubielaDev/AudioFlowMatrix/releases/download/v0.3.0/AudioFlowMatrix-Portable-0.3.0.exe"><img src="https://img.shields.io/badge/Descargar%20para%20Windows-v0.3.0%20%C2%B7%20portable%20.exe-8b5cf6?style=for-the-badge&logo=data:image/svg%2Bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0id2hpdGUiPjxwYXRoIGQ9Ik0wIDBoMTEuNHYxMS40SDB6TTEyLjYgMEgyNHYxMS40SDEyLjZ6TTAgMTIuNmgxMS40VjI0SDB6TTEyLjYgMTIuNkgyNFYyNEgxMi42eiIvPjwvc3ZnPg==&logoColor=white" alt="Descargar para Windows" height="40"></a>
+  <a href="https://github.com/SubielaDev/AudioFlowMatrix/releases/download/v0.3.1/AudioFlowMatrix-Portable-0.3.1.exe"><img src="https://img.shields.io/badge/Descargar%20para%20Windows-v0.3.1%20%C2%B7%20portable%20.exe-8b5cf6?style=for-the-badge&logo=data:image/svg%2Bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0id2hpdGUiPjxwYXRoIGQ9Ik0wIDBoMTEuNHYxMS40SDB6TTEyLjYgMEgyNHYxMS40SDEyLjZ6TTAgMTIuNmgxMS40VjI0SDB6TTEyLjYgMTIuNkgyNFYyNEgxMi42eiIvPjwvc3ZnPg==&logoColor=white" alt="Descargar para Windows" height="40"></a>
 </p>
 <p align="center">
   <a href="https://ko-fi.com/J2A629T99Y"><img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Apóyame en Ko-fi"></a>
