@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.25)
 
 project(AudioFlowMatrix
-    VERSION 0.3.0
+    VERSION 0.3.1
     DESCRIPTION "Low-latency ASIO/WASAPI routing matrix for Windows"
     LANGUAGES C CXX RC)
 
