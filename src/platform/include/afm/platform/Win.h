@@ -116,7 +116,8 @@ private:
 
     static Api loadApi() noexcept {
         Api api;
-        if (HMODULE m = LoadLibraryW(L"avrt.dll")) {
+        // System32 only: a bare name would also search the exe's folder (DLL planting).
+        if (HMODULE m = LoadLibraryExW(L"avrt.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32)) {
             api.setCharacteristics = reinterpret_cast<decltype(api.setCharacteristics)>(
                 reinterpret_cast<void*>(GetProcAddress(m, "AvSetMmThreadCharacteristicsW")));
             api.setPriority = reinterpret_cast<decltype(api.setPriority)>(

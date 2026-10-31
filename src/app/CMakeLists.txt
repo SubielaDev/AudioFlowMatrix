@@ -18,6 +18,7 @@ target_link_libraries(AudioFlowMatrix PRIVATE
     shell32
     dbghelp)
 afm_configure_target(AudioFlowMatrix)
+afm_safe_dll_search(AudioFlowMatrix)
 string(TIMESTAMP AFM_BUILD_TIME "%Y-%m-%d %H:%M")
 target_compile_definitions(AudioFlowMatrix PRIVATE AFM_VERSION_STRING="${PROJECT_VERSION}, built ${AFM_BUILD_TIME}")
 

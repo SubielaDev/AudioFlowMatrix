@@ -24,3 +24,4 @@ add_library(AudioFlowMatrixASIO SHARED
 set_target_properties(AudioFlowMatrixASIO PROPERTIES PREFIX "" OUTPUT_NAME "AudioFlowMatrixASIO")
 target_link_libraries(AudioFlowMatrixASIO PRIVATE afm::asio_common advapi32 oleaut32)
 afm_configure_target(AudioFlowMatrixASIO)
+afm_safe_dll_search(AudioFlowMatrixASIO)

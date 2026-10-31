@@ -36,3 +36,16 @@ function(afm_configure_target target)
         endif()
     endif()
 endfunction()
+
+# Resolve the target's static DLL imports from System32 only (DLL-planting defence for an
+# executable or DLL that may sit in a user-writable folder such as Downloads).
+function(afm_safe_dll_search target)
+    if(NOT WIN32)
+        return()
+    endif()
+    if(MSVC)
+        target_link_options(${target} PRIVATE /DEPENDENTLOADFLAG:0x800)
+    else()
+        target_sources(${target} PRIVATE ${PROJECT_SOURCE_DIR}/src/platform/SafeDllSearch.c)
+    endif()
+endfunction()
