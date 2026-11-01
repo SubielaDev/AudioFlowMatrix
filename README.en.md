@@ -3,7 +3,7 @@
   <a href="https://github.com/SubielaDev/AudioFlowMatrix/releases/download/v0.4.0/AudioFlowMatrix-Portable-0.4.0.exe"><img src="https://img.shields.io/badge/Download%20for%20Windows-v0.4.0%20%C2%B7%20portable%20.exe-8b5cf6?style=for-the-badge&logo=data:image/svg%2Bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0id2hpdGUiPjxwYXRoIGQ9Ik0wIDBoMTEuNHYxMS40SDB6TTEyLjYgMEgyNHYxMS40SDEyLjZ6TTAgMTIuNmgxMS40VjI0SDB6TTEyLjYgMTIuNkgyNFYyNEgxMi42eiIvPjwvc3ZnPg==&logoColor=white" alt="Download for Windows" height="40"></a>
 </p>
 <p align="center">
-  <a href="https://ko-fi.com/J2A629T99Y"><img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Support me on Ko-fi"></a>
+  <a href="https://ko-fi.com/subidev"><img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Support me on Ko-fi"></a>
 </p>
 
 <p align="center">
@@ -50,7 +50,7 @@ flowchart LR
 
     MX --> FO
     MX --> TI
-    MX --> PTT["Push-to-talk<br/><small>MIDI</small>"] --> ST
+    MX --> PTT["Push-to-talk<br/><small>MIDI / keys</small>"] --> ST
 
     classDef master fill:#8b5cf6,stroke:#a78bfa,color:#fff
     classDef core fill:#1f6feb,stroke:#58a6ff,color:#fff
@@ -72,7 +72,8 @@ flowchart LR
 - **Windows sound loopback**: whatever plays on a playback device (a game, Discord, the browser) comes
   into the matrix as another input.
 - Optional **push-to-talk** from the mic to the Stream output, hold or toggle.
-- **MIDI control**: a MIDI tab with MIDI Learn for push-to-talk and every channel's MUTE.
+- **MIDI control and keyboard shortcuts**: a MIDI / Keys tab with Learn for push-to-talk and every
+  channel's MUTE, from a MIDI pad or a computer key (alone or with Ctrl, Shift, Alt).
 - **Diagnostics**: a MIDI/PTT/audio log and crash reports with the exact function and line.
 - **Update notice**: once a day it asks GitHub for the latest release and, if it is newer, shows a notice
   with a button that opens its page. Nothing is downloaded or installed automatically; turn it off in
@@ -136,16 +137,23 @@ runs at another rate) and adds 30 ms of latency to the mic.
 open; the mic to the interface is untouched. **Hold to talk** or **Toggle**. A toolbar button turns
 red **ON AIR**. Opening and closing fade over ~10 ms.
 
-### MIDI
+### MIDI and keys
 
-**MIDI** tab:
+**MIDI / Keys** tab:
 
 - **MIDI input**: the controller, with **Refresh** to pick up one plugged in while the app runs.
   On Windows 10 a MIDI input can be open in only one program at a time: if Traktor holds it,
   free it in its *Controller Manager* or use another port of the controller.
-- **Mappable controls**: push-to-talk and every input and output channel's MUTE. **Learn**, then the
-  pad, key or button; **Clear** removes it. Notes and CCs (≥ 64 = pressed). One pad drives one
-  control. Mappings follow channel names and keep working while the window is minimised.
+- **Mappable controls**: push-to-talk and every input and output channel's MUTE, each with a column
+  for its MIDI control and one for its key. **Learn**, then a MIDI pad or button, or a computer key:
+  whichever comes first is mapped. The **x** next to each removes it and **Esc** cancels Learn. MIDI
+  takes notes and CCs (≥ 64 = pressed). One pad or key drives one control. Mappings follow channel
+  names and keep working while the window is minimised.
+- **Keys**: a single key (F13, Right Ctrl...) or a combination (Ctrl+M, Ctrl+Shift+F5). To map a
+  modifier on its own, such as Right Ctrl for push-to-talk, press and release it. They work while
+  another program is in front (a game, Discord), and that program still gets the key: the app
+  never blocks or changes it. Pick keys you don't use for anything else. While you type in one of
+  the app's fields, mapped keys do nothing. The app never stores or logs keys that are not mapped.
 - **Last MIDI messages** shows what arrives and what each message did.
 
 ### Files
@@ -181,11 +189,11 @@ src/core      lock-free SPSC rings (heap and shared-memory), triple buffer, alig
 src/dsp       AVX2/FMA matrix mixer (runtime-dispatched), cubic drift resampler + PI loop,
               VoiceProcessor (RNNoise + noise gate)
 src/engine    AudioEngine (bus layout, process, telemetry, PTT gate), RoutingModel (dB/mute/pan), PushToTalk
-src/midi      MIDI decoding, bindings and MidiMap (portable) + WinMM input
+src/midi      MIDI decoding, bindings, MidiMap and KeyMap (portable) + WinMM input
 src/platform  Win32 helpers: COM pointer, MMCSS, UTF-8
 src/asio      ASIO ABI, host for the master driver, virtual driver DLL + shared-memory bridge
 src/wasapi    WASAPI capture/render endpoints (exclusive with shared fallback)
-src/app       Dear ImGui front-end (Win32 + OpenGL 3), settings, languages, tray, PTT/MIDI, log and crash reports
+src/app       Dear ImGui front-end (Win32 + OpenGL 3), settings, languages, tray, PTT/MIDI/keyboard, log and crash reports
 tests         core and engine, voice (RNNoise/gate), PTT/MIDI, ASIO bridge, update notice, languages,
               driver identity
 tools         brand_assets.py: builds the icon and embedded logo from docs/assets
@@ -213,6 +221,18 @@ picked at runtime.
 The executable embeds a copy of `AudioFlowMatrixASIO.dll` (resource 101) and uses it when the
 DLL is not next to it, so the same `.exe` doubles as the portable version. It is built as a
 GUI-subsystem application, so it opens no console window.
+
+## Support the project
+
+If you find this project useful and want to support its development, you can buy me a coffee on
+Ko-fi.
+
+Your support helps me keep spending time on new features, improving the apps and starting new
+projects.
+
+Every small contribution is welcome and much appreciated!
+
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-Support%20me-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/subidev)
 
 ## License
 

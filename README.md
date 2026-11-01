@@ -12,7 +12,7 @@
  
 </p>
 <p align="center">
-  <a href="https://ko-fi.com/J2A629T99Y"><img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Apóyame en Ko-fi"></a>
+  <a href="https://ko-fi.com/subidev"><img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Apóyame en Ko-fi"></a>
 </p>
 
 **Español** · [English](README.en.md)
@@ -44,7 +44,7 @@ flowchart LR
 
     MX --> FO
     MX --> TI
-    MX --> PTT["Push-to-talk<br/><small>MIDI</small>"] --> ST
+    MX --> PTT["Push-to-talk<br/><small>MIDI / teclas</small>"] --> ST
 
     classDef master fill:#8b5cf6,stroke:#a78bfa,color:#fff
     classDef core fill:#1f6feb,stroke:#58a6ff,color:#fff
@@ -66,7 +66,8 @@ flowchart LR
 - **Loopback del sonido de Windows**: lo que suena en un dispositivo de reproducción (juego, Discord,
   navegador) entra en la matriz como un canal más.
 - **Push-to-talk** opcional del micro hacia la salida Stream, en modo mantener o conmutar.
-- **Control MIDI**: pestaña MIDI con MIDI Learn para el PTT y el MUTE de cada canal.
+- **Control MIDI y atajos de teclado**: pestaña MIDI / Teclas con Learn para el PTT y el MUTE de cada
+  canal, con un pad MIDI o con una tecla del ordenador (sola o con Ctrl, Shift, Alt).
 - **Diagnóstico**: log de MIDI/PTT/audio e informes de crash con la función y línea exactas.
 - **Aviso de nuevas versiones**: una vez al día pregunta a GitHub cuál es la última release y, si hay una
   más nueva, muestra un aviso con un botón para abrir su página. No descarga ni instala nada por su cuenta;
@@ -132,17 +133,25 @@ está abierto; el micro hacia la tarjeta no se toca. Modo **Hold to talk** o **T
 botón en la barra superior que se pone en rojo **ON AIR**. La apertura y el cierre tienen un
 fundido de ~10 ms.
 
-### MIDI
+### MIDI y teclas
 
-Pestaña **MIDI**:
+Pestaña **MIDI / Teclas**:
 
 - **MIDI input**: el controlador, con **Refresh** para detectar uno conectado con la app abierta.
   En Windows 10 cada entrada MIDI solo la puede abrir un programa a la vez: si Traktor la usa,
   libérala en su *Controller Manager* o usa otro puerto del controlador.
-- **Mappable controls**: Push-to-talk y el MUTE de cada canal (entradas y salidas). **Learn** y
-  luego el pad, tecla o botón; **Clear** para quitarlo. Acepta notas y CC (≥ 64 = pulsado). Un
-  pad controla una sola cosa. Las asignaciones van por nombre de canal y funcionan con la
-  ventana minimizada.
+- **Mappable controls**: Push-to-talk y el MUTE de cada canal (entradas y salidas), cada uno con
+  una columna para el control MIDI y otra para la tecla. **Learn** y luego un pad o botón MIDI, o
+  una tecla del ordenador: se asigna lo que llegue primero. La **x** junto a cada uno lo quita y
+  **Esc** cancela el Learn. En MIDI acepta notas y CC (≥ 64 = pulsado). Un pad o una tecla
+  controla una sola cosa. Las asignaciones van por nombre de canal y funcionan con la ventana
+  minimizada.
+- **Teclas**: una sola (F13, Ctrl derecho...) o una combinación (Ctrl+M, Ctrl+Shift+F5). Para
+  asignar un modificador solo, como Ctrl derecho para el PTT, púlsalo y suéltalo. Funcionan
+  aunque otro programa esté delante (un juego, Discord), y ese programa también recibe la tecla:
+  la app no la bloquea ni la cambia. Elige teclas que no uses para otra cosa. Mientras escribes en
+  un campo de la app, las teclas asignadas no actúan. La app no guarda ni anota las teclas que no
+  están asignadas.
 - **Last MIDI messages** muestra lo que llega y qué hizo cada mensaje.
 
 ### Archivos
@@ -181,11 +190,11 @@ src/core      colas SPSC lock-free (en heap y en memoria compartida), triple buf
 src/dsp       mezclador matricial AVX2/FMA (elegido en tiempo de ejecución), resampler cúbico + lazo PI,
               VoiceProcessor (RNNoise + puerta de ruido)
 src/engine    AudioEngine (bus, process, telemetría, puerta PTT), RoutingModel (dB/mute/paneo), PushToTalk
-src/midi      decodificación MIDI, asignaciones y MidiMap (portables) + entrada WinMM
+src/midi      decodificación MIDI, asignaciones, MidiMap y KeyMap (portables) + entrada WinMM
 src/platform  utilidades Win32: puntero COM, MMCSS, UTF-8
 src/asio      ABI de ASIO, host del driver maestro, DLL del driver virtual + puente de memoria compartida
 src/wasapi    endpoints WASAPI de captura y reproducción (exclusivo con fallback a compartido)
-src/app       interfaz Dear ImGui (Win32 + OpenGL 3), ajustes, idiomas, bandeja, PTT/MIDI, log e informes de crash
+src/app       interfaz Dear ImGui (Win32 + OpenGL 3), ajustes, idiomas, bandeja, PTT/MIDI/teclado, log e informes de crash
 tests         núcleo y motor, voz (RNNoise/puerta), PTT/MIDI, puente ASIO, avisos de versión, idiomas,
               identidad del driver
 tools         brand_assets.py: genera el icono y el logo embebido desde docs/assets
@@ -214,6 +223,18 @@ CPUs. Las rutinas AVX2 se eligen en tiempo de ejecución.
 El ejecutable lleva dentro una copia de `AudioFlowMatrixASIO.dll` (recurso 101): si no encuentra
 la DLL a su lado, usa esa. Por eso el mismo `.exe` sirve como versión portable. Se compila como
 aplicación de ventana (subsistema GUI), así que no abre ninguna consola.
+
+## Apoya el proyecto
+
+Si este proyecto te resulta útil y quieres apoyar su desarrollo, puedes invitarme a un café a
+través de Ko-fi.
+
+Tu apoyo me ayuda a seguir dedicando tiempo a desarrollar nuevas funcionalidades, mejorar las
+aplicaciones y crear nuevos proyectos.
+
+¡Cualquier pequeña contribución es bienvenida y muy agradecida!
+
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-Support%20me-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/subidev)
 
 ## Licencia
 
