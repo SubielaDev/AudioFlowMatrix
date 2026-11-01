@@ -23,7 +23,7 @@ namespace afm::app {
 namespace {
 
 constexpr wchar_t kProjectPage[] = L"https://github.com/SubielaDev/AudioFlowMatrix";
-constexpr wchar_t kKofiPage[] = L"https://ko-fi.com/J2A629T99Y";
+constexpr wchar_t kKofiPage[] = L"https://ko-fi.com/subidev";
 
 // Brand cyan and violet first, then distinct hues for further devices.
 constexpr ImU32 kGroupColors[] = {IM_COL32(30, 200, 245, 255), IM_COL32(160, 120, 250, 255),
