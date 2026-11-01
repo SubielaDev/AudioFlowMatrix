@@ -6,16 +6,16 @@
 
 namespace afm {
 
-// Push-to-talk state shared by the GUI thread (mouse), the MIDI callback thread and the
-// audio thread. Lock-free, and owned outside the engine so it survives audio restarts.
+// Push-to-talk state shared by the GUI thread (mouse), the MIDI and keyboard threads and
+// the audio thread. Lock-free, and owned outside the engine so it survives audio restarts.
 //
-// Hold:   open while any source (mouse button, MIDI pad) is held down.
+// Hold:   open while any source (mouse button, MIDI pad, key) is held down.
 // Toggle: each press flips it open/closed; repeated presses without a release (a CC
 //         that re-sends its "on" value) count once.
 class PushToTalk {
 public:
     enum class Mode : std::uint8_t { Hold, Toggle };
-    enum class Source : std::uint8_t { Mouse, Midi };
+    enum class Source : std::uint8_t { Mouse, Midi, Keyboard };
 
     void setEnabled(bool on) noexcept { enabled_.store(on, std::memory_order_relaxed); }
     [[nodiscard]] bool enabled() const noexcept { return enabled_.load(std::memory_order_relaxed); }
@@ -36,7 +36,10 @@ public:
     // Whether mic -> stream passes right now (ignores enabled(); the engine checks both).
     [[nodiscard]] bool open() const noexcept {
         if (mode() == Mode::Toggle) return latched_.load(std::memory_order_relaxed) != 0;
-        return held_[0].load(std::memory_order_relaxed) || held_[1].load(std::memory_order_relaxed);
+        for (const auto& h : held_) {
+            if (h.load(std::memory_order_relaxed)) return true;
+        }
+        return false;
     }
 
     // What the engine applies: the gate only acts while PTT is enabled.
@@ -47,7 +50,7 @@ private:
 
     std::atomic<bool> enabled_{false};
     std::atomic<Mode> mode_{Mode::Hold};
-    std::array<std::atomic<bool>, 2> held_{};
+    std::array<std::atomic<bool>, 3> held_{};
     std::atomic<std::uint32_t> latched_{0};
 };
 

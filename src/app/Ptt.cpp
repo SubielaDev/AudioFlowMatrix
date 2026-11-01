@@ -1,5 +1,5 @@
-// Push-to-talk (mic -> stream) and MIDI control: the input port, the MIDI map (MIDI Learn
-// for PTT and channel mutes), the diagnostics log and their UI. The PTT gate itself runs
+// Push-to-talk (mic -> stream), MIDI control and key shortcuts: the input port, the MIDI
+// and key maps (Learn for PTT and channel mutes), the diagnostics log and their UI. The PTT gate itself runs
 // in the engine (AudioEngine::setPtt).
 
 #include "App.h"
@@ -65,6 +65,28 @@ std::string targetLabelUi(const std::string& target, const std::map<std::string,
     return target;
 }
 
+// "Ctrl+Shift+M", "Right Ctrl": key names come from the keyboard layout (in its language).
+std::string keyText(const midi::KeyBinding& binding) {
+    if (!binding.mapped()) return tr("not mapped");
+    std::string text;
+    if (binding.modifiers & midi::kModCtrl) text += "Ctrl+";
+    if (binding.modifiers & midi::kModShift) text += "Shift+";
+    if (binding.modifiers & midi::kModAlt) text += "Alt+";
+    if (binding.modifiers & midi::kModWin) text += "Win+";
+    const UINT scan = MapVirtualKeyW(binding.key, MAPVK_VK_TO_VSC_EX);
+    LONG param = static_cast<LONG>(scan & 0xFF) << 16;
+    if ((scan & 0xFF00) == 0xE000) param |= 1 << 24;  // extended key: Right Ctrl, arrows, ...
+    wchar_t name[64] = {};
+    if (scan != 0 && GetKeyNameTextW(param, name, 64) > 0) {
+        text += win::toUtf8(name);
+    } else {
+        char code[16];
+        std::snprintf(code, sizeof(code), "VK 0x%02X", binding.key);  // media keys and the like
+        text += code;
+    }
+    return text;
+}
+
 } // namespace
 
 // ---- MIDI thread ----------------------------------------------------------------------------
@@ -91,6 +113,7 @@ void App::onMidi(void* user, std::uint32_t message, std::uint32_t timeMs) noexce
 
 void App::syncPttBinding() {
     pttBinding_.store(settings_.midiMap.bindingFor(midi::MidiMap::pttTarget()).pack(), std::memory_order_relaxed);
+    pttKey_.store(settings_.keyMap.bindingFor(midi::MidiMap::pttTarget()).pack(), std::memory_order_relaxed);
 }
 
 void App::applyPttSettings() {
@@ -135,13 +158,14 @@ void App::openMidi() {
 
 void App::startMidiLearn(const std::string& target) {
     midiLearnTarget_ = target;
+    keyLearner_.reset();
     midiLearning_.store(true, std::memory_order_release);
-    log_.write("MIDI Learn: waiting for a control for %s", targetLabel(target).c_str());
+    log_.write("Learn: waiting for a MIDI control or a key for %s", targetLabel(target).c_str());
 }
 
 void App::cancelMidiLearn() {
     if (!midiLearning_.exchange(false, std::memory_order_acq_rel)) return;
-    log_.write("MIDI Learn: cancelled");
+    log_.write("Learn: cancelled");
     midiLearnTarget_.clear();
 }
 
@@ -156,7 +180,10 @@ void App::clearMidiMapping(const std::string& target) {
 void App::applyMidiAction(const std::string& target, const midi::MidiEvent& event) {
     const auto binding = settings_.midiMap.bindingFor(target);
     if (binding.actionFor(event) != midi::MidiBinding::Action::Press) return;
+    toggleMute(target, "MIDI");
+}
 
+void App::toggleMute(const std::string& target, const std::string& source) {
     const std::string in = midi::MidiMap::inputMuteTarget("");
     const std::string out = midi::MidiMap::outputMuteTarget("");
     const bool isInput = startsWith(target, in);
@@ -168,10 +195,72 @@ void App::applyMidiAction(const std::string& target, const midi::MidiEvent& even
         ChannelStrip& strip = isInput ? routing_.input(ch) : routing_.output(ch);
         strip.mute = !strip.mute;
         routingDirty_ = true;
-        log_.write("MIDI -> %s: %s", targetLabel(target).c_str(), strip.mute ? "MUTED" : "unmuted");
+        log_.write("%s -> %s: %s", source.c_str(), targetLabel(target).c_str(), strip.mute ? "MUTED" : "unmuted");
         return;
     }
-    log_.write("MIDI -> %s: channel not active right now (start audio / enable the device)", targetLabel(target).c_str());
+    log_.write("%s -> %s: channel not active right now (start audio / enable the device)", source.c_str(),
+               targetLabel(target).c_str());
+}
+
+// ---- Key shortcuts --------------------------------------------------------------------------
+
+// Keyboard thread. Like onMidi: the PTT gate is driven from here, the rest goes to the GUI.
+void App::onKey(void* user, const midi::KeyEvent& event) noexcept {
+    auto* self = static_cast<App*>(user);
+    if (!self->midiLearning_.load(std::memory_order_acquire)) {
+        const auto binding = midi::KeyBinding::unpack(self->pttKey_.load(std::memory_order_relaxed));
+        const auto action = binding.actionFor(event);
+        const bool typing = self->keysSuspended_.load(std::memory_order_relaxed);
+        if (action == midi::KeyBinding::Action::Press && !typing) self->ptt_->press(PushToTalk::Source::Keyboard);
+        if (action == midi::KeyBinding::Action::Release) self->ptt_->release(PushToTalk::Source::Keyboard);
+        if (typing) return;
+    }
+    (void)self->keyEvents_.tryPush({event});  // full only if the GUI is stuck; a dropped key is harmless
+}
+
+void App::startKeyboard() {
+    keyboardError_.clear();
+    if (!keyboard_.start(&App::onKey, this, keyboardError_)) {
+        log_.write("%s", keyboardError_.c_str());
+        return;
+    }
+    log_.write("Keyboard: listening for key shortcuts (%zu mapped)", settings_.keyMap.entries().size());
+}
+
+void App::clearKeyMapping(const std::string& target) {
+    settings_.keyMap.clear(target);
+    syncPttBinding();
+    settingsDirty_ = true;
+    log_.write("Keyboard: key for %s cleared", targetLabel(target).c_str());
+}
+
+void App::pollKeys() {
+    KeyLogEntry e;
+    while (keyEvents_.tryPop(e)) {
+        if (midiLearning_.load(std::memory_order_relaxed)) {
+            midi::KeyBinding binding;
+            const auto result = keyLearner_.feed(e.event, binding);
+            if (result == midi::KeyLearner::Result::Cancelled) {
+                cancelMidiLearn();
+            } else if (result == midi::KeyLearner::Result::Learned && !midiLearnTarget_.empty()) {
+                const std::string* previous = settings_.keyMap.targetFor(binding);
+                if (previous != nullptr && *previous != midiLearnTarget_) {
+                    log_.write("Learn: %s was mapped to %s; moved", keyText(binding).c_str(), targetLabel(*previous).c_str());
+                }
+                settings_.keyMap.assign(midiLearnTarget_, binding);
+                syncPttBinding();
+                settingsDirty_ = true;
+                log_.write("Learn: %s mapped to key %s", targetLabel(midiLearnTarget_).c_str(), keyText(binding).c_str());
+                midiLearnTarget_.clear();
+                midiLearning_.store(false, std::memory_order_release);
+            }
+            continue;
+        }
+        if (e.event.kind != midi::KeyEvent::Kind::Press) continue;
+        const midi::KeyBinding pressed{e.event.key, e.event.modifiers};
+        const std::string* target = settings_.keyMap.targetFor(pressed);
+        if (target != nullptr && *target != midi::MidiMap::pttTarget()) toggleMute(*target, "Key " + keyText(pressed));
+    }
 }
 
 void App::pollMidi() {
@@ -237,9 +326,10 @@ void App::drawPttButton() {
     if (ImGui::IsItemDeactivated()) ptt_->release(PushToTalk::Source::Mouse);
 
     if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) {
-        ImGui::SetTooltip(tr("Push-to-talk, mic -> stream (%s)\nMIDI: %s (map it in the MIDI tab)"),
+        ImGui::SetTooltip(tr("Push-to-talk, mic -> stream (%s)\nMIDI: %s   Key: %s (map them in the MIDI / Keys tab)"),
                           settings_.pttToggle ? tr("click to toggle") : tr("hold to talk"),
-                          bindingText(settings_.midiMap.bindingFor(midi::MidiMap::pttTarget())).c_str());
+                          bindingText(settings_.midiMap.bindingFor(midi::MidiMap::pttTarget())).c_str(),
+                          keyText(settings_.keyMap.bindingFor(midi::MidiMap::pttTarget())).c_str());
     }
 }
 
@@ -263,8 +353,9 @@ bool App::drawPttSettings() {
     ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
     ImGui::TextWrapped("%s", tr("While enabled, the mic only reaches the Stream output when PTT is open. The mic to your "
                                 "interface and everything else is unaffected."));
-    ImGui::TextWrapped(tr("MIDI: %s. Map it, and channel mutes, in the MIDI tab."),
-                       bindingText(settings_.midiMap.bindingFor(midi::MidiMap::pttTarget())).c_str());
+    ImGui::TextWrapped(tr("MIDI: %s. Key: %s. Map them, and channel mutes, in the MIDI / Keys tab."),
+                       bindingText(settings_.midiMap.bindingFor(midi::MidiMap::pttTarget())).c_str(),
+                       keyText(settings_.keyMap.bindingFor(midi::MidiMap::pttTarget())).c_str());
     ImGui::PopStyleColor();
     if (settings_.pttEnabled && running_ && (mic_ == nullptr || stream_ == nullptr)) {
         ImGui::TextColored(ImVec4(0.95f, 0.65f, 0.2f, 1), "%s", tr("Enable the USB mic and the stream output for PTT to act."));
@@ -272,7 +363,8 @@ bool App::drawPttSettings() {
     return changed;
 }
 
-// MIDI tab: input port, every mappable control with Learn / Clear, monitor and log.
+// MIDI / Keys tab: input port, every mappable control with its MIDI control and key (Learn
+// takes whichever comes first, x clears one), monitor and log.
 void App::drawMidi() {
     const float s = ImGui::GetFontSize() / 16.0f;
     bool changed = false;
@@ -321,13 +413,23 @@ void App::drawMidi() {
     ImGui::SeparatorText(tr("Mappable controls"));
     const bool learning = midiLearning_.load(std::memory_order_relaxed);
     if (learning) {
-        ImGui::TextColored(ImVec4(0.6f, 0.45f, 1.0f, 1), tr("Press the pad, key or button for \"%s\"..."),
+        ImGui::TextColored(ImVec4(0.6f, 0.45f, 1.0f, 1),
+                           tr("Press a MIDI pad or button, or a computer key, for \"%s\"... (Esc cancels)"),
                            targetLabelUi(midiLearnTarget_, settings_.inputAliases, settings_.outputAliases).c_str());
-    } else if (!midiIn_.isOpen()) {
-        ImGui::TextDisabled("%s", tr("Pick a MIDI input above to use MIDI Learn."));
     } else {
-        ImGui::TextDisabled("%s", tr("Press Learn on a control, then the pad, key or button that should drive it."));
+        ImGui::TextDisabled("%s", tr("Press Learn on a control, then a MIDI pad or button, or a key (alone or with Ctrl, "
+                                     "Shift, Alt)."));
     }
+    ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
+    ImGui::TextWrapped("%s", tr("Keys work while other programs are in front, and still reach them: pick keys you don't "
+                                "use for anything else, such as F13-F24 or a combination."));
+    ImGui::PopStyleColor();
+    if (!keyboardError_.empty()) ImGui::TextColored(ImVec4(0.95f, 0.65f, 0.2f, 1), "%s", keyboardError_.c_str());
+    // While learning, Space or Enter must not also press the focused button.
+    ImGuiIO& io = ImGui::GetIO();
+    if (learning) navBlockedUntil_ = GetTickCount64() + 400;
+    if (GetTickCount64() < navBlockedUntil_) io.ConfigFlags &= ~ImGuiConfigFlags_NavEnableKeyboard;
+    else io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 
     struct Row {
         std::string target;
@@ -346,6 +448,10 @@ void App::drawMidi() {
         const bool listed = std::any_of(rows.begin(), rows.end(), [&](const Row& r) { return r.target == entry.target; });
         if (!listed) rows.push_back({entry.target, "", false});
     }
+    for (const auto& entry : settings_.keyMap.entries()) {
+        const bool listed = std::any_of(rows.begin(), rows.end(), [&](const Row& r) { return r.target == entry.target; });
+        if (!listed) rows.push_back({entry.target, "", false});
+    }
     for (Row& r : rows) {
         if (r.label.empty()) r.label = targetLabelUi(r.target, settings_.inputAliases, settings_.outputAliases);
     }
@@ -360,15 +466,17 @@ void App::drawMidi() {
     const ImGuiTableFlags flags = ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_ScrollY |
                                   ImGuiTableFlags_SizingStretchProp;
     const float tableHeight = std::max(160.0f * s, ImGui::GetContentRegionAvail().y - ImGui::GetTextLineHeightWithSpacing() * 10.5f);
-    if (ImGui::BeginTable("midi-map", 3, flags, ImVec2(0, tableHeight))) {
+    if (ImGui::BeginTable("midi-map", 4, flags, ImVec2(0, tableHeight))) {
         ImGui::TableSetupScrollFreeze(0, 1);
         ImGui::TableSetupColumn(tr("Control"), ImGuiTableColumnFlags_WidthStretch, 3.0f);
         ImGui::TableSetupColumn(tr("MIDI control"), ImGuiTableColumnFlags_WidthStretch, 2.0f);
-        ImGui::TableSetupColumn("##actions", ImGuiTableColumnFlags_WidthFixed, 170 * s);
+        ImGui::TableSetupColumn(tr("Key"), ImGuiTableColumnFlags_WidthStretch, 2.0f);
+        ImGui::TableSetupColumn("##actions", ImGuiTableColumnFlags_WidthFixed, 90 * s);
         ImGui::TableHeadersRow();
         for (const Row& r : rows) {
             if (!filter.PassFilter(r.label.c_str())) continue;
             const auto binding = settings_.midiMap.bindingFor(r.target);
+            const auto key = settings_.keyMap.bindingFor(r.target);
             const bool learningThis = learning && midiLearnTarget_ == r.target;
             ImGui::PushID(r.target.c_str());
             ImGui::TableNextRow();
@@ -379,24 +487,35 @@ void App::drawMidi() {
             if (r.active) ImGui::TextUnformatted(r.label.c_str());
             else ImGui::TextDisabled(tr("%s  (not active)"), r.label.c_str());
 
+            // One binding cell: its text and an x that clears it.
+            const auto cell = [&](bool mapped, const std::string& text, const char* id) {
+                ImGui::AlignTextToFramePadding();
+                if (learningThis) {
+                    ImGui::TextColored(ImVec4(0.7f, 0.6f, 1.0f, 1), "%s", tr("waiting..."));
+                    return false;
+                }
+                if (!mapped) {
+                    ImGui::TextDisabled("-");
+                    return false;
+                }
+                ImGui::TextUnformatted(text.c_str());
+                ImGui::SameLine();
+                const bool clicked = ImGui::SmallButton(id);
+                if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) ImGui::SetTooltip("%s", tr("Clear"));
+                return clicked;
+            };
             ImGui::TableSetColumnIndex(1);
-            ImGui::AlignTextToFramePadding();
-            if (learningThis) ImGui::TextColored(ImVec4(0.7f, 0.6f, 1.0f, 1), "%s", tr("waiting..."));
-            else if (binding.type == midi::MidiBinding::Type::None) ImGui::TextDisabled("-");
-            else ImGui::TextUnformatted(binding.describe().c_str());
-
+            const bool hasMidi = binding.type != midi::MidiBinding::Type::None;
+            if (cell(hasMidi, hasMidi ? binding.describe() : std::string{}, "x##midi")) clearMidiMapping(r.target);
             ImGui::TableSetColumnIndex(2);
+            if (cell(key.mapped(), key.mapped() ? keyText(key) : std::string{}, "x##key")) clearKeyMapping(r.target);
+
+            ImGui::TableSetColumnIndex(3);
             if (learningThis) {
                 if (ImGui::SmallButton(tr("Cancel"))) cancelMidiLearn();
-            } else {
-                ImGui::BeginDisabled(!midiIn_.isOpen());
-                if (ImGui::SmallButton(tr("Learn"))) startMidiLearn(r.target);
-                ImGui::EndDisabled();
+            } else if (ImGui::SmallButton(tr("Learn"))) {
+                startMidiLearn(r.target);
             }
-            ImGui::SameLine();
-            ImGui::BeginDisabled(binding.type == midi::MidiBinding::Type::None);
-            if (ImGui::SmallButton(tr("Clear"))) clearMidiMapping(r.target);
-            ImGui::EndDisabled();
             ImGui::PopID();
         }
         ImGui::EndTable();

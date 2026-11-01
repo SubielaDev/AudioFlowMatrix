@@ -6,6 +6,7 @@ add_executable(AudioFlowMatrix WIN32
     CrashReport.cpp
     Log.cpp
     Ptt.cpp
+    Keyboard.cpp
     Driver.cpp
     WindowChrome.cpp
     I18n.cpp

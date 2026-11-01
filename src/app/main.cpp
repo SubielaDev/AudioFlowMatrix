@@ -215,6 +215,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR cmdLine, int) {
         perfMoving = std::wcsstr(cmdLine, L"--perf-scene=silent") == nullptr;
         if (std::wcsstr(cmdLine, L"--perf-tab=matrix") != nullptr) perfTab = "matrix";
         if (std::wcsstr(cmdLine, L"--perf-tab=devices") != nullptr) perfTab = "devices";
+        if (std::wcsstr(cmdLine, L"--perf-tab=midi") != nullptr) perfTab = "midi";
     }
 
     const float dpiScale = ImGui_ImplWin32_GetDpiScaleForMonitor(MonitorFromPoint(POINT{0, 0}, MONITOR_DEFAULTTOPRIMARY));

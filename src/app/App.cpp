@@ -111,6 +111,7 @@ App::App(HWND window, PerfScene perf) : window_(window), perf_(perf) {
     refreshDevices();
     applyPttSettings();
     openMidi();
+    startKeyboard();
 
     // At most once a day; a failed check (offline) is retried at the next start.
     const long long now = static_cast<long long>(std::time(nullptr));
@@ -130,6 +131,7 @@ App::App(HWND window, PerfScene perf) : window_(window), perf_(perf) {
 
 App::~App() {
     midiIn_.close();  // before the members its callback touches go away
+    keyboard_.stop();
     saveSettings();
     stopAudio();
     vasio_.close();
@@ -456,6 +458,8 @@ void App::pollVirtualClient() {
 void App::idle() {
     pollVirtualClient();
     pollMidi();
+    keysSuspended_.store(false, std::memory_order_relaxed);  // no text field while minimized
+    pollKeys();
     if (routingDirty_) {
         publishMix();
         routingDirty_ = false;
@@ -467,7 +471,10 @@ void App::frame() {
     if (running_ && host_.takeResetRequest()) {
         restartAudio();  // the driver changed buffer size / rate
     }
-    pollMidi();  // before publishing, so MIDI mutes reach the audio this frame
+    pollMidi();  // before publishing, so MIDI and key mutes reach the audio this frame
+    // Typing a channel name or a dB value must not fire the shortcuts.
+    keysSuspended_.store(GetForegroundWindow() == window_ && ImGui::GetIO().WantTextInput, std::memory_order_relaxed);
+    pollKeys();
     if (routingDirty_) {
         publishMix();
         routingDirty_ = false;
@@ -515,7 +522,7 @@ void App::frame() {
                     drawDevices();
                     ImGui::EndTabItem();
                 }
-                if (ImGui::BeginTabItem("MIDI###tab-midi")) {
+                if (ImGui::BeginTabItem(tr("MIDI / Keys###tab-midi"), nullptr, perfTab("midi"))) {
                     drawMidi();
                     ImGui::EndTabItem();
                 }
@@ -587,6 +594,7 @@ bool App::loadSettings() {
         else if (key == "ptt.enabled") settings_.pttEnabled = value == "1";
         else if (key == "ptt.toggle") settings_.pttToggle = value == "1";
         else if (key == "midimap") settings_.midiMap.load(value);
+        else if (key == "keymap") settings_.keyMap.load(value);
         // Before the MIDI tab, the PTT mapping had a key of its own.
         else if (key == "ptt.midi") settings_.midiMap.assign(midi::MidiMap::pttTarget(), midi::MidiBinding::parse(value));
         else if (key == "midi.device") settings_.midiDevice = value;
@@ -634,6 +642,7 @@ void App::saveSettings() const {
         << "update.ignored=" << settings_.updateIgnored << '\n'
         << "update.last=" << settings_.updateLastCheck << '\n';
     for (const auto& entry : settings_.midiMap.entries()) out << "midimap=" << midi::MidiMap::serialize(entry) << '\n';
+    for (const auto& entry : settings_.keyMap.entries()) out << "keymap=" << midi::KeyMap::serialize(entry) << '\n';
     for (const auto& [name, alias] : settings_.inputAliases) out << "alias.in=" << escapeSetting(name) << '|' << escapeSetting(alias) << '\n';
     for (const auto& [name, alias] : settings_.outputAliases) out << "alias.out=" << escapeSetting(name) << '|' << escapeSetting(alias) << '\n';
     routing_.save(out);

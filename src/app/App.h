@@ -2,6 +2,7 @@
 
 #include "AsioHost.h"
 #include "Driver.h"
+#include "Keyboard.h"
 #include "Log.h"
 #include "UpdateCheck.h"
 #include "VirtualAsioServer.h"
@@ -10,6 +11,7 @@
 #include "afm/engine/PushToTalk.h"
 #include "afm/engine/RoutingModel.h"
 #include "afm/platform/Win.h"
+#include "afm/midi/KeyMap.h"
 #include "afm/midi/MidiInput.h"
 #include "afm/midi/MidiMap.h"
 #include "afm/midi/MidiMessage.h"
@@ -49,6 +51,7 @@ struct Settings {
     std::map<std::string, std::string> inputAliases;
     std::map<std::string, std::string> outputAliases;
     midi::MidiMap midiMap;     // MIDI controls -> PTT / channel mutes
+    midi::KeyMap keyMap;       // computer-keyboard keys -> the same targets
     bool updateCheck = true;        // ask GitHub once a day whether a newer release exists
     std::string updateLatest;       // latest release tag seen, e.g. "v0.3.2"
     std::string updateIgnored;      // tag the user chose to ignore
@@ -148,6 +151,15 @@ private:
     void clearMidiMapping(const std::string& target);
     void syncPttBinding();
     static void onMidi(void* user, std::uint32_t message, std::uint32_t timeMs) noexcept;  // WinMM thread
+    void toggleMute(const std::string& target, const std::string& source);
+
+    struct KeyLogEntry {
+        midi::KeyEvent event;
+    };
+    void startKeyboard();
+    void pollKeys();
+    void clearKeyMapping(const std::string& target);
+    static void onKey(void* user, const midi::KeyEvent& event) noexcept;  // keyboard thread
     void drawStatusBar();
     bool drawStrip(const char* id, bool input, std::uint32_t ch, unsigned color, float width);
     [[nodiscard]] const std::string& inputLabel(std::uint32_t i) const;
@@ -192,12 +204,22 @@ private:
     std::vector<midi::MidiInput::Device> midiDevices_;
     std::string midiError_;
     std::atomic<std::uint32_t> pttBinding_{0};  // MidiBinding::pack(), read on the MIDI thread
-    std::atomic<bool> midiLearning_{false};  // MIDI thread: don't act while learning
-    std::string midiLearnTarget_;             // GUI thread: what the next control gets mapped to
+    std::atomic<bool> midiLearning_{false};  // MIDI and keyboard threads: don't act while learning
+    std::string midiLearnTarget_;             // GUI thread: what the next control or key gets mapped to
     SpscRingBuffer<MidiLogEntry> midiEvents_{1024};  // MIDI thread -> GUI (log, monitor, learn)
     std::atomic<std::uint64_t> midiDropped_{0};
     std::deque<std::string> midiMonitor_;  // last messages, newest first
     bool pttWasPassing_ = true;
+
+    // Key shortcuts. Unmapped keys are never logged or kept: the ring only feeds Learn and
+    // the mappings, and is emptied every frame.
+    KeyboardInput keyboard_;
+    std::string keyboardError_;
+    std::atomic<std::uint32_t> pttKey_{0};       // KeyBinding::pack(), read on the keyboard thread
+    std::atomic<bool> keysSuspended_{false};     // typing in one of our text fields: presses ignored
+    SpscRingBuffer<KeyLogEntry> keyEvents_{256};  // keyboard thread -> GUI
+    midi::KeyLearner keyLearner_;
+    unsigned long long navBlockedUntil_ = 0;  // GetTickCount64(): ImGui keyboard nav off around Learn
 
     // Virtual ASIO client: late-block counts sampled once a second (oldest first, 10 s), and
     // what was last written to the log.

@@ -4,6 +4,7 @@
 #include "afm/engine/AudioEngine.h"
 #include "afm/engine/PushToTalk.h"
 #include "afm/engine/RingEndpoints.h"
+#include "afm/midi/KeyMap.h"
 #include "afm/midi/MidiMap.h"
 #include "afm/midi/MidiMessage.h"
 
@@ -158,6 +159,13 @@ void testPttStateMachine() {
     AFM_CHECK(p.open());  // mouse still down
     p.release(S::Mouse);
     AFM_CHECK(!p.open());
+    p.press(S::Keyboard);  // the key source counts like the others
+    AFM_CHECK(p.open());
+    p.press(S::Mouse);
+    p.release(S::Keyboard);
+    AFM_CHECK(p.open());
+    p.release(S::Mouse);
+    AFM_CHECK(!p.open());
 
     // Toggle: one flip per press; a repeated "on" without release counts once.
     p.setMode(PushToTalk::Mode::Toggle);
@@ -181,6 +189,84 @@ void testPttStateMachine() {
 
     p.setEnabled(false);
     AFM_CHECK(p.passing());
+}
+
+// ---- Key shortcuts -----------------------------------------------------------------------------
+
+void testKeys() {
+    namespace vk = afm::midi::vk;
+    using afm::midi::KeyBinding;
+    using afm::midi::KeyEvent;
+    using afm::midi::KeyLearner;
+    using afm::midi::KeyMap;
+    using afm::midi::KeyTracker;
+    constexpr std::uint8_t kM = 'M', kF13 = 0x7C;
+
+    // Auto-repeat is one press; modifiers are reported without the key itself.
+    KeyTracker t;
+    KeyEvent e;
+    AFM_CHECK(t.update(vk::kLControl, true, e) && e.kind == KeyEvent::Kind::Press && e.modifiers == 0);
+    AFM_CHECK(!t.update(vk::kLControl, true, e));  // repeat
+    AFM_CHECK(t.update(kM, true, e) && e.key == kM && e.modifiers == afm::midi::kModCtrl);
+    AFM_CHECK(!t.update(kM, true, e));
+    AFM_CHECK(t.update(vk::kLControl, false, e) && e.kind == KeyEvent::Kind::Release && e.modifiers == 0);
+    AFM_CHECK(t.update(kM, false, e) && e.kind == KeyEvent::Kind::Release && e.modifiers == 0);
+    AFM_CHECK(!t.update(kM, false, e));  // never seen down
+    AFM_CHECK(!t.anyDown());
+
+    // Ctrl+M presses only with exactly Ctrl; its release counts whatever is held.
+    const KeyBinding ctrlM{kM, afm::midi::kModCtrl};
+    AFM_CHECK(ctrlM.actionFor({KeyEvent::Kind::Press, kM, afm::midi::kModCtrl}) == KeyBinding::Action::Press);
+    AFM_CHECK(ctrlM.actionFor({KeyEvent::Kind::Press, kM, 0}) == KeyBinding::Action::None);
+    AFM_CHECK(ctrlM.actionFor({KeyEvent::Kind::Press, kM, afm::midi::kModCtrl | afm::midi::kModShift}) ==
+              KeyBinding::Action::None);
+    AFM_CHECK(ctrlM.actionFor({KeyEvent::Kind::Release, kM, 0}) == KeyBinding::Action::Release);
+    AFM_CHECK(ctrlM.actionFor({KeyEvent::Kind::Press, 'N', afm::midi::kModCtrl}) == KeyBinding::Action::None);
+    AFM_CHECK(KeyBinding{}.actionFor({KeyEvent::Kind::Press, 0, 0}) == KeyBinding::Action::None);
+
+    // Pack and settings round trips; bad lines are ignored.
+    AFM_CHECK(KeyBinding::unpack(ctrlM.pack()) == ctrlM);
+    AFM_CHECK(KeyBinding::parse(ctrlM.serialize()) == ctrlM);
+    AFM_CHECK(!KeyBinding::parse("key:1").mapped());
+    AFM_CHECK(!KeyBinding::parse("key:1:77x").mapped());
+    AFM_CHECK(!KeyBinding::parse("key:99:77").mapped());
+    AFM_CHECK(!KeyBinding::parse("key:0:27").mapped());  // Escape cancels Learn, never a shortcut
+    AFM_CHECK(!KeyBinding::parse("note:1:36").mapped());
+
+    // Learn: a plain key, a combination pressed modifier first, a modifier alone, Escape.
+    KeyLearner l;
+    KeyBinding b;
+    AFM_CHECK(l.feed({KeyEvent::Kind::Press, kF13, 0}, b) == KeyLearner::Result::Learned && (b == KeyBinding{kF13, 0}));
+    l.reset();
+    AFM_CHECK(l.feed({KeyEvent::Kind::Press, vk::kLControl, 0}, b) == KeyLearner::Result::Waiting);
+    AFM_CHECK(l.feed({KeyEvent::Kind::Press, kM, afm::midi::kModCtrl}, b) == KeyLearner::Result::Learned && b == ctrlM);
+    l.reset();
+    AFM_CHECK(l.feed({KeyEvent::Kind::Press, vk::kRControl, 0}, b) == KeyLearner::Result::Waiting);
+    AFM_CHECK(l.feed({KeyEvent::Kind::Release, vk::kRControl, 0}, b) == KeyLearner::Result::Learned &&
+              (b == KeyBinding{vk::kRControl, 0}));
+    l.reset();
+    AFM_CHECK(l.feed({KeyEvent::Kind::Press, vk::kLShift, 0}, b) == KeyLearner::Result::Waiting);
+    AFM_CHECK(l.feed({KeyEvent::Kind::Press, vk::kLControl, afm::midi::kModShift}, b) == KeyLearner::Result::Waiting);
+    AFM_CHECK(l.feed({KeyEvent::Kind::Release, vk::kLShift, afm::midi::kModCtrl}, b) == KeyLearner::Result::Waiting);
+    l.reset();
+    AFM_CHECK(l.feed({KeyEvent::Kind::Press, vk::kEscape, 0}, b) == KeyLearner::Result::Cancelled);
+
+    // Map: one key per target, one target per key, and a settings round trip.
+    KeyMap m;
+    m.assign("ptt", {vk::kRControl, 0});
+    m.assign("mute.in:Mic L", ctrlM);
+    AFM_CHECK(m.targetFor(ctrlM) != nullptr && *m.targetFor(ctrlM) == "mute.in:Mic L");
+    m.assign("mute.out:Stream L", ctrlM);  // moves the key
+    AFM_CHECK(!m.bindingFor("mute.in:Mic L").mapped() && m.bindingFor("mute.out:Stream L") == ctrlM);
+    m.assign("ptt", {kF13, 0});  // replaces the old key of the target
+    AFM_CHECK(m.entries().size() == 2 && (m.bindingFor("ptt") == KeyBinding{kF13, 0}));
+    KeyMap loaded;
+    for (const auto& entry : m.entries()) loaded.load(KeyMap::serialize(entry));
+    loaded.load("garbage");
+    loaded.load("key:0:77|");
+    AFM_CHECK(loaded.entries().size() == 2 && loaded.bindingFor("mute.out:Stream L") == ctrlM);
+    m.clear("ptt");
+    AFM_CHECK(!m.bindingFor("ptt").mapped() && m.entries().size() == 1);
 }
 
 // ---- Engine gate -------------------------------------------------------------------------------
@@ -293,6 +379,7 @@ int main() {
     testBindings();
     testMidiMap();
     testPttStateMachine();
+    testKeys();
     testEngineGate();
     testRoutingChangeWhileClosed();
 
