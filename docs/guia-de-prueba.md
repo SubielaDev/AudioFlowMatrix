@@ -4,7 +4,7 @@
 
 AudioFlow Matrix sustituye a ASIO Link Pro / Voicemeeter: une tu tarjeta ASIO, Traktor, un
 micro USB y la salida para Discord/OBS en una sola matriz de ruteo de baja latencia, con
-supresor de ruido para el micro, push-to-talk y control por MIDI. Esta guía explica cómo
+supresor de ruido para el micro, push-to-talk y control por MIDI o con atajos de teclado. Esta guía explica cómo
 instalarlo, qué probar y qué contarnos.
 
 La interfaz sale en el idioma de Windows. Esta guía cita los botones con su nombre en inglés: si
@@ -144,17 +144,30 @@ En **Devices > Push-to-talk** (opcional, viene desactivado):
 - En la barra superior aparece un botón gris "PTT (mic muted on stream)" que se pone en rojo
   **ON AIR**. Abrir y cerrar tiene un fundido de unos 10 ms, sin clics.
 
-## MIDI
+## MIDI y teclas
 
-Pestaña **MIDI**:
+Pestaña **MIDI / Teclas**:
 
 1. **MIDI input**: elige tu controlador. Si lo conectas con la app abierta, pulsa **Refresh**.
+   Si solo vas a usar el teclado del ordenador, no hace falta ningún controlador.
 2. **Mappable controls** lista todo lo que se puede mapear: Push-to-talk y el MUTE de cada canal
-   (los canales aparecen con el audio en marcha). Pulsa **Learn** en una fila y aprieta el pad,
-   tecla o botón. **Clear** lo quita. **Filter** busca por nombre.
-3. Los MUTE se conmutan con cada pulsación. Un pad controla una sola cosa: si lo asignas a otra,
-   se quita de la anterior. Funciona también con la ventana minimizada.
+   (los canales aparecen con el audio en marcha), con una columna para el control MIDI y otra
+   para la tecla. Pulsa **Learn** en una fila y luego un pad o botón MIDI, o una tecla del
+   ordenador: se asigna lo que llegue primero. **Esc** cancela. La **x** junto a cada asignación
+   la quita. **Filter** busca por nombre.
+3. Los MUTE se conmutan con cada pulsación. Un pad o una tecla controla una sola cosa: si lo
+   asignas a otra, se quita de la anterior. Funciona también con la ventana minimizada.
 4. **Last MIDI messages** muestra lo que llega del controlador y qué hizo cada mensaje.
+
+Teclas del ordenador:
+
+- Puede ser una tecla sola (F13, Ctrl derecho...) o una combinación (Ctrl+M, Ctrl+Shift+F5). Para
+  asignar un modificador solo, como Ctrl derecho para el PTT, púlsalo y suéltalo.
+- Funcionan aunque tengas delante otro programa (un juego, Discord), y ese programa también recibe
+  la tecla: la app no la bloquea. Elige teclas que no uses para otra cosa.
+- Mientras escribes en un campo de la app (un nombre de canal, un valor de dB), las teclas
+  asignadas no actúan.
+- La app no guarda ni anota las teclas que no tienen asignación.
 
 En Windows 10 cada entrada MIDI solo la puede abrir un programa a la vez. Si Traktor está usando
 el controlador sale un aviso naranja: libéralo en Traktor (*Controller Manager*) o usa otro
@@ -190,11 +203,13 @@ Si hay una más nueva aparece un aviso azul bajo la barra superior:
 - [ ] PTT: en Discord/OBS no se te oye hasta pulsar; mantener/soltar sin clics; Toggle funciona
 - [ ] MIDI: el controlador aparece, "Last MIDI messages" muestra mensajes, Learn asigna el pad
 - [ ] Un pad asignado al PTT y otro al MUTE de un canal funcionan, también con la ventana minimizada
+- [ ] Teclas: Learn asigna una tecla al PTT y una combinación (p. ej. Ctrl+M) al MUTE de un canal; funcionan
+      con un juego o Discord delante y con la app minimizada, y al escribir un nombre de canal no saltan
 - [ ] Cambiar volumen, mute o paneo no produce clics
 - [ ] En el Mezclador, doble clic en el número de dB permite escribir la ganancia; doble clic en el fader la
       vuelve a 0 dB; la tira del micro sube hasta +24 dB
-- [ ] Renombrar una entrada y una salida: el nombre nuevo aparece en Matrix, Mixer y MIDI y se mantiene al reabrir
-- [ ] Cerrar y reabrir la app conserva el ruteo, el dispositivo MIDI y las asignaciones
+- [ ] Renombrar una entrada y una salida: el nombre nuevo aparece en Matrix, Mixer y MIDI / Teclas y se mantiene al reabrir
+- [ ] Cerrar y reabrir la app conserva el ruteo, el dispositivo MIDI y las asignaciones MIDI y de teclas
 - [ ] Cerrar y reabrir Traktor con la app en marcha reconecta solo
 - [ ] Con una versión antigua instalada, al abrir aparece el aviso de versión nueva y **Download** abre su página
 - [ ] En **Settings > Language** el idioma cambia al momento y se mantiene al cerrar y reabrir la app
@@ -218,7 +233,8 @@ Si hay una más nueva aparece un aviso azul bajo la barra superior:
 | Discord no oye nada | Falta CABLE Output, rutas a Stream o PTT cerrado | Revisar el micro en Discord, Stream L/R en la matriz y el PTT |
 | Bajar un solo fader de Stream no cambia nada en Discord | Discord mezcla L y R en mono | Mover los dos faders de Stream |
 | MIDI: aviso naranja "in use by another program" | Otro programa (p. ej. Traktor) tiene el puerto | Liberarlo en ese programa u otro puerto, y Refresh |
-| El controlador MIDI no aparece | Se conectó con la app abierta | Pulsar Refresh en la pestaña MIDI |
+| El controlador MIDI no aparece | Se conectó con la app abierta | Pulsar Refresh en la pestaña MIDI / Teclas |
+| Una tecla asignada no hace nada | Se pulsa con otro modificador, o estás escribiendo en un campo de la app | Pulsar exactamente la combinación asignada, fuera de los campos de texto |
 | Register driver falla | Se canceló el aviso de administrador | Repetir y aceptar |
 
 ## Qué reportar
@@ -230,8 +246,8 @@ Abre un [issue](https://github.com/SubielaDev/AudioFlowMatrix/issues) con:
 - El texto rojo, amarillo o naranja de la app, tal cual.
 - El DSP % y los dropouts del micro/stream.
 - Qué ruta falla, cuándo y qué se oyó (clic, corte, silencio).
-- Si falla el MIDI o el PTT: los archivos `AudioFlowMatrix.log` y `AudioFlowMatrix.previous.log`
-  de `%APPDATA%\AudioFlowMatrix\logs` (botón **Open log folder** en la pestaña MIDI).
+- Si falla el MIDI, una tecla o el PTT: los archivos `AudioFlowMatrix.log` y `AudioFlowMatrix.previous.log`
+  de `%APPDATA%\AudioFlowMatrix\logs` (botón **Open log folder** en la pestaña MIDI / Teclas).
 - Si el programa se cierra de golpe: los dos archivos `crash-...` (`.txt` y `.dmp`) de
   `%APPDATA%\AudioFlowMatrix\crashes`, y qué estabas haciendo justo antes.
 

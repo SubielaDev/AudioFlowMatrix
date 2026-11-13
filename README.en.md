@@ -11,6 +11,25 @@
 
 [Español](README.md) · **English**
 
+<p align="center"><img src="docs/assets/preview.gif" alt="AudioFlow Matrix routing matrix with live meters" width="900"></p>
+
+## Contents
+
+- [Features](#features)
+- [Using it](#using-it)
+  - [Matrix and mixer](#matrix-and-mixer)
+  - [Traktor: safety buffer](#traktor-safety-buffer)
+  - [Mic: denoise and gate](#mic-denoise-and-gate)
+  - [Push-to-talk](#push-to-talk)
+  - [MIDI and keys](#midi-and-keys)
+  - [Files](#files)
+- [Latency budget](#latency-budget)
+- [Layout](#layout)
+- [Building](#building)
+- [Support the project](#support-the-project)
+- [License](#license)
+- [Step-by-step test guide (Spanish)](docs/guia-de-prueba.md)
+
 Low-latency audio router for Windows. One master ASIO interface owns the clock;
 Traktor/DAWs (through a virtual ASIO driver), a USB mic and a Discord/OBS output are
 slaved to it through lock-free rings and drift-compensating resamplers.

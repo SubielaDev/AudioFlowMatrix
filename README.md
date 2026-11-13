@@ -11,6 +11,25 @@
 
 **Español** · [English](README.en.md)
 
+<p align="center"><img src="docs/assets/preview.gif" alt="Matriz de AudioFlow Matrix con medidores en tiempo real" width="900"></p>
+
+## Índice
+
+- [Funciones](#funciones)
+- [Uso](#uso)
+  - [Matriz y mezclador](#matriz-y-mezclador)
+  - [Traktor: búfer de seguridad](#traktor-búfer-de-seguridad)
+  - [Micrófono: Denoise y Gate](#micrófono-denoise-y-gate)
+  - [Push-to-talk](#push-to-talk)
+  - [MIDI y teclas](#midi-y-teclas)
+  - [Archivos](#archivos)
+- [Latencia](#latencia)
+- [Estructura](#estructura)
+- [Compilar](#compilar)
+- [Apoya el proyecto](#apoya-el-proyecto)
+- [Licencia](#licencia)
+- [Guía de prueba paso a paso](docs/guia-de-prueba.md)
+
 Router de audio de baja latencia para Windows. Una interfaz ASIO maestra marca el reloj;
 Traktor y los DAWs (a través de un driver ASIO virtual), un micrófono USB y una salida
 para Discord/OBS se sincronizan con ella mediante colas lock-free y resamplers que
